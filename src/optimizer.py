@@ -88,8 +88,14 @@ def run_optimization(
         placement_result = calculate_cost_based_placement(
             vehicles, routes, locations, relation_lookup, config
         )
-        # Apply placement to vehicles
+        # Apply placement to vehicles (in-memory)
         apply_placement_to_vehicles(vehicles, placement_result.placements)
+        
+        # Update vehicle locations in database if using database mode
+        if run_id is not None and data_dir is None:
+            from db_adapter import FleetDatabase
+            with FleetDatabase() as db:
+                db.update_vehicle_locations_bulk(placement_result.placements)
     
     placement_time = time.time() - placement_start
     console.print(f"[green]✓[/green] Placement completed in [yellow]{placement_time:.2f}s[/yellow]")
@@ -195,6 +201,12 @@ def run_quick_test(
             vehicles, routes, locations, relation_lookup, config
         )
         apply_placement_to_vehicles(vehicles, placement_result.placements)
+        
+        # Update vehicle locations in database if using database mode
+        if run_id is not None and data_dir is None:
+            from db_adapter import FleetDatabase
+            with FleetDatabase() as db:
+                db.update_vehicle_locations_bulk(placement_result.placements)
     
     # Run assignment (will use assignment_lookahead_days internally)
     with console.status("[bold green]Assigning routes...", spinner="dots"):

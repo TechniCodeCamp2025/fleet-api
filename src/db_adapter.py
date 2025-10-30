@@ -406,6 +406,47 @@ class FleetDatabase:
         
         return assignment_id
     
+    def update_vehicle_location(
+        self,
+        vehicle_id: int,
+        location_id: int
+    ):
+        """Update vehicle's current location in the database"""
+        self.cur.execute("""
+            UPDATE vehicles 
+            SET current_location_id = %s, 
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+        """, (location_id, vehicle_id))
+    
+    def update_vehicle_locations_bulk(
+        self,
+        placements: Dict[int, int]
+    ):
+        """
+        Bulk update vehicle locations after placement.
+        
+        Args:
+            placements: Dict mapping vehicle_id to location_id
+        """
+        if not placements:
+            return
+        
+        print(f"\n[*] Updating {len(placements)} vehicle locations in database...")
+        
+        try:
+            # Use efficient bulk update
+            for vehicle_id, location_id in placements.items():
+                self.update_vehicle_location(vehicle_id, location_id)
+            
+            # Commit all changes
+            self.conn.commit()
+            print(f"[✓] Updated vehicle locations in database")
+        except Exception as e:
+            self.conn.rollback()
+            print(f"[✗] Error updating vehicle locations: {e}")
+            raise
+    
     def save_vehicle_state(
         self,
         vehicle_state: VehicleState,
