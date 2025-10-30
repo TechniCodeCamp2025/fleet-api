@@ -3,7 +3,7 @@
   "output_dir": "output",
   
   "placement": {
-    "strategy": "coverage_first",
+    "strategy": "cost_matrix",
     "lookahead_days": 14,
     "max_concentration": 0.30,
     "max_vehicles_per_location": null

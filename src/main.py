@@ -9,10 +9,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-# Load environment variables from .env file
+# Load environment variables from .notenv file (do this FIRST!)
 try:
     from dotenv import load_dotenv
-    load_dotenv()
+    # Try .notenv first, then fall back to .env
+    if not load_dotenv('.notenv', override=True):
+        load_dotenv('.env', override=True)
 except ImportError:
     pass  # python-dotenv not required, will use system env vars
 

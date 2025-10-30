@@ -11,6 +11,13 @@ from datetime import datetime
 import os
 import threading
 
+# Load .env file at module import
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass  # python-dotenv not required, will use system env vars
+
 from models import (
     Vehicle, Location, LocationRelation, Route, Segment,
     RouteAssignment, VehicleState, AssignmentConfig

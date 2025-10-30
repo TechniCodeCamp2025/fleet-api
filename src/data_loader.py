@@ -8,6 +8,13 @@ from collections import defaultdict
 from pathlib import Path
 import os
 
+# Load .env file at module import
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
 from models import Vehicle, Location, LocationRelation, Route, Segment
 
 

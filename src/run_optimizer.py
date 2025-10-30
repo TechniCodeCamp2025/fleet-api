@@ -12,6 +12,13 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
+# Load environment variables from .env file FIRST!
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)  # Override existing env vars with .env file values
+except ImportError:
+    pass  # python-dotenv not required, will use system env vars
+
 from models import AssignmentConfig
 from optimizer import run_optimization, run_quick_test
 

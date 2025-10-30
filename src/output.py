@@ -11,6 +11,13 @@ import os
 from rich.console import Console
 from rich.table import Table
 
+# Load .env file at module import
+try:
+    from dotenv import load_dotenv
+    load_dotenv(override=True)
+except ImportError:
+    pass
+
 from models import RouteAssignment, VehicleState, PlacementResult, AssignmentResult
 
 console = Console()
@@ -390,15 +397,16 @@ def save_all_results(
     run_id: int = None
 ) -> int:
     """
-    Save all results to database and/or output directory.
-    ALWAYS tries database first, falls back to CSV only if database is unavailable.
+    Save all results to database (ALWAYS).
+    Also saves to CSV as backup if CSV_BACKUP env var is set.
     
     Returns:
-        run_id if saved to database, None if saved to CSV
+        run_id if saved to database, None if saved to CSV only (on error)
     """
-    # ALWAYS try to save to database first
+    # ALWAYS try to save to database - this is the PRIMARY storage
+    db_save_success = False
     try:
-        console.print("[dim]Saving results to database...[/dim]")
+        console.print("[bold cyan]Saving results to database...[/bold cyan]")
         from db_adapter import FleetDatabase
         
         with FleetDatabase() as db:
@@ -406,12 +414,16 @@ def save_all_results(
                 # Start a new run if not provided
                 run_id = db.start_algorithm_run()
             
+            console.print(f"[dim]  → Saving {len(assignment_result.assignments)} assignments...[/dim]")
+            
             # Save all assignments and vehicle states
             db.save_all_results(
                 assignment_result.assignments,
                 assignment_result.vehicle_states,
                 run_id
             )
+            
+            console.print(f"[dim]  → Marking run as complete...[/dim]")
             
             # Complete the run
             db.complete_algorithm_run(
@@ -421,21 +433,49 @@ def save_all_results(
                 total_cost=assignment_result.total_cost
             )
         
-        console.print(f"[green]✓[/green] Results saved to database (run_id=[cyan]{run_id}[/cyan])")
+        console.print(f"[bold green]✓ Results saved to database successfully![/bold green]")
+        console.print(f"  Run ID: [cyan]{run_id}[/cyan]")
+        console.print(f"  Assignments: [cyan]{len(assignment_result.assignments)}[/cyan]")
+        console.print(f"  Total cost: [cyan]{assignment_result.total_cost:,.2f} PLN[/cyan]")
+        db_save_success = True
+        
+        # Also save CSV backup if requested
+        if os.getenv('CSV_BACKUP') == '1':
+            console.print("\n[dim]Creating CSV backup (CSV_BACKUP=1)...[/dim]")
+            _save_csv_backup(placement_result, assignment_result, output_dir, runtime_seconds, vehicles)
+        
         return run_id
+        
     except Exception as e:
-        console.print(f"[red]✗[/red] Database save failed: {e}")
-        console.print(f"[yellow]⚠[/yellow] Falling back to CSV file export...")
+        console.print(f"\n[bold red]✗ DATABASE SAVE FAILED![/bold red]")
+        console.print(f"[red]Error: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        console.print(f"\n[bold yellow]⚠ Falling back to CSV export as emergency backup...[/bold yellow]")
         # Fall through to CSV save below
     
-    # Otherwise save to CSV (backward compatibility)
+    # Emergency fallback: save to CSV if database failed
+    if not db_save_success:
+        console.print(f"[yellow]Writing emergency CSV backup to {output_dir}/...[/yellow]")
+        _save_csv_backup(placement_result, assignment_result, output_dir, runtime_seconds, vehicles)
+        console.print(f"[yellow]✓ Emergency CSV backup created[/yellow]")
+        console.print(f"[bold red]WARNING: Database save failed - please check database connection![/bold red]")
+        return None
+
+
+def _save_csv_backup(
+    placement_result: PlacementResult,
+    assignment_result: AssignmentResult,
+    output_dir: str,
+    runtime_seconds: float,
+    vehicles: List = None
+):
+    """Internal function to save CSV backup"""
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Generate timestamp for this run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
-    console.print(f"\n[dim]Saving results to {output_dir}/...[/dim]")
     
     # Save vehicles with placement (new CSV for assignment input)
     if vehicles:
@@ -470,7 +510,4 @@ def save_all_results(
         str(output_path / f"summary_{timestamp}.json"),
         runtime_seconds
     )
-    
-    console.print(f"\n[bold green]✓ All results saved successfully![/bold green]")
-    return None
 
