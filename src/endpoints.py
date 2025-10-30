@@ -280,10 +280,13 @@ async def root():
         "endpoints": {
             "health": "/health",
             "database": "/db/info",
+            "csv": {
+                "upload": "/csv/upload - Upload single CSV file (auto-detects type and imports to DB)"
+            },
             "upload": {
-                "validate": "/upload/validate - Validate CSV files (optional)",
-                "process": "/upload/process - Process CSV files (optional)",
-                "import": "/upload/import - Import CSVs to database (optional)"
+                "validate": "/upload/validate - Validate multiple CSV files (multipart, optional)",
+                "process": "/upload/process - Process multiple CSV files (multipart, optional)",
+                "import": "/upload/import - Import multiple CSVs to database (multipart, optional)"
             },
             "algorithm": {
                 "placement": "/algorithm/placement - Run placement algorithm only",
@@ -291,7 +294,7 @@ async def root():
                 "full": "/algorithm/run - Run both algorithms (placement + assignment)"
             }
         },
-        "description": "All algorithm endpoints require JSON config and pull/save data from database. CSV uploads are optional."
+        "description": "Algorithm endpoints require JSON config and pull/save data from database. Use /csv/upload for single CSV imports."
     }
 
 
@@ -667,6 +670,151 @@ async def import_to_database(
         results['status'] = 'error'
         results['errors'].append(str(e))
         print(f"❌ Error during import: {e}")
+    
+    return JSONResponse(content=results)
+
+
+def detect_csv_type(headers: List[str]) -> Optional[str]:
+    """
+    Detect CSV type based on column headers.
+    
+    Args:
+        headers: List of column names from CSV
+    
+    Returns:
+        CSV type name ('locations', 'vehicles', etc.) or None if unknown
+    """
+    headers_set = set(h.strip() for h in headers)
+    
+    # Check each schema to find best match
+    best_match = None
+    best_score = 0
+    
+    for csv_type, schema in CSV_SCHEMAS.items():
+        required_cols = set(schema['required_columns'])
+        matched_cols = required_cols.intersection(headers_set)
+        score = len(matched_cols) / len(required_cols)
+        
+        # Require at least 80% match
+        if score >= 0.8 and score > best_score:
+            best_score = score
+            best_match = csv_type
+    
+    return best_match
+
+
+@app.post("/csv/upload")
+async def upload_single_csv(file: UploadFile = File(..., description="Single CSV file")):
+    """
+    Upload a single CSV file and import it to database.
+    
+    This endpoint automatically detects the CSV type based on its schema/columns
+    and imports it into the appropriate database table.
+    
+    Supported CSV types:
+    - locations.csv
+    - locations_relations.csv
+    - routes.csv
+    - segments.csv
+    - vehicles.csv
+    """
+    print(f"\n{'='*80}")
+    print(f"📤 SINGLE CSV UPLOAD: {file.filename}")
+    print('='*80 + "\n")
+    
+    from db_adapter import FleetDatabase
+    import csv as csv_lib
+    import io
+    
+    results = {
+        "status": "success",
+        "filename": file.filename,
+        "detected_type": None,
+        "rows_imported": 0,
+        "error": None
+    }
+    
+    try:
+        # Read CSV content
+        content = await file.read()
+        text = content.decode('utf-8')
+        
+        # Parse CSV to get headers
+        reader = csv_lib.DictReader(io.StringIO(text))
+        headers = reader.fieldnames
+        
+        if not headers:
+            raise HTTPException(status_code=400, detail="CSV file has no headers")
+        
+        # Detect CSV type
+        csv_type = detect_csv_type(headers)
+        
+        if not csv_type:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not detect CSV type. Headers found: {', '.join(headers)}"
+            )
+        
+        results['detected_type'] = csv_type
+        print(f"🔍 Detected CSV type: {csv_type}")
+        
+        # Validate CSV structure
+        is_valid, error_msg, rows = validate_csv_structure(content, csv_type)
+        
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"CSV validation failed: {error_msg}")
+        
+        print(f"✓ CSV validation passed")
+        
+        # Import to database based on type
+        with FleetDatabase() as db:
+            # Re-read CSV for import
+            reader = csv_lib.DictReader(io.StringIO(text))
+            count = 0
+            
+            print(f"📥 Importing {csv_type} to database...")
+            
+            if csv_type == 'locations':
+                for row in reader:
+                    db.import_location(row)
+                    count += 1
+            elif csv_type == 'locations_relations':
+                for row in reader:
+                    db.import_location_relation(row)
+                    count += 1
+            elif csv_type == 'vehicles':
+                for row in reader:
+                    db.import_vehicle(row)
+                    count += 1
+            elif csv_type == 'routes':
+                for row in reader:
+                    db.import_route(row)
+                    count += 1
+            elif csv_type == 'segments':
+                for row in reader:
+                    db.import_segment(row)
+                    count += 1
+            
+            db.conn.commit()
+            results['rows_imported'] = count
+            
+            print(f"✓ Imported {count} rows to {csv_type} table")
+        
+        print(f"\n{'='*80}")
+        print(f"✅ CSV IMPORT COMPLETED")
+        print(f"   Type: {csv_type}")
+        print(f"   Rows: {count}")
+        print('='*80 + "\n")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        results['status'] = 'error'
+        results['error'] = str(e)
+        print(f"❌ Error during CSV import: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await file.close()
     
     return JSONResponse(content=results)
 
