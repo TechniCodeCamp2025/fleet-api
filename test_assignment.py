@@ -16,6 +16,7 @@ from models import AssignmentConfig, PlacementResult, AssignmentResult
 from placement import calculate_placement, apply_placement_to_vehicles
 from assignment import assign_routes
 from output import write_assignments_csv, write_vehicle_states_csv
+import csv
 
 
 def load_config_from_file(config_path='algorithm_config.json'):
@@ -161,7 +162,83 @@ def test_assignment(config_path='algorithm_config.json'):
     vehicle_states_file = f"output/vehicle_states_{timestamp}.csv"
     write_vehicle_states_csv(assignment_result.vehicle_states, vehicle_states_file)
     
+    # Save processed vehicles data
+    vehicles_processed_file = f"output/vehicles_processed_{timestamp}.csv"
+    with open(vehicles_processed_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Id', 'registration_number', 'brand', 'service_interval_km', 
+                        'Leasing_start_km', 'leasing_limit_km', 'leasing_start_date', 
+                        'leasing_end_date', 'current_odometer_km', 'Current_location_id'])
+        for vehicle in vehicles:
+            writer.writerow([
+                vehicle.id,
+                vehicle.registration_number,
+                vehicle.brand,
+                vehicle.service_interval_km,
+                vehicle.leasing_start_km,
+                vehicle.leasing_limit_km,
+                vehicle.leasing_start_date.strftime('%Y-%m-%d %H:%M:%S'),
+                vehicle.leasing_end_date.strftime('%Y-%m-%d %H:%M:%S'),
+                vehicle.current_odometer_km,
+                vehicle.current_location_id if vehicle.current_location_id is not None else 'N/A'
+            ])
+    
+    # Save processed routes data
+    routes_processed_file = f"output/routes_processed_{timestamp}.csv"
+    with open(routes_processed_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['id', 'start_datetime', 'end_datetime', 'distance_km'])
+        for route in routes:
+            writer.writerow([
+                route.id,
+                route.start_datetime.strftime('%Y-%m-%d %H:%M:%S'),
+                route.end_datetime.strftime('%Y-%m-%d %H:%M:%S'),
+                route.distance_km
+            ])
+    
+    # Save processed locations data
+    locations_processed_file = f"output/locations_processed_{timestamp}.csv"
+    with open(locations_processed_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['id', 'name', 'lat', 'long', 'is_hub'])
+        for location in locations:
+            writer.writerow([
+                location.id,
+                location.name,
+                location.lat,
+                location.lon,
+                1 if location.is_hub else 0
+            ])
+    
+    # Save summary statistics to CSV
+    summary_file = f"output/summary_{timestamp}.csv"
+    with open(summary_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Metric', 'Value'])
+        writer.writerow(['Total Routes', len(routes)])
+        writer.writerow(['Routes Assigned', assignment_result.routes_assigned])
+        writer.writerow(['Routes Unassigned', assignment_result.routes_unassigned])
+        writer.writerow(['Assignment Rate (%)', f"{assignment_result.routes_assigned/len(routes)*100:.1f}"])
+        writer.writerow(['Relocations', relocations])
+        writer.writerow(['Relocation Rate (%)', f"{relocations/len(assignment_result.assignments)*100:.1f}" if assignment_result.assignments else "0.0"])
+        writer.writerow(['Average Chain Score', f"{avg_chain_score:.3f}"])
+        writer.writerow(['Total Vehicles', len(vehicles)])
+        writer.writerow(['Vehicles Used', utilized])
+        writer.writerow(['Vehicle Utilization (%)', f"{utilized/len(vehicles)*100:.1f}"])
+        writer.writerow(['Average Routes per Vehicle', f"{avg_routes:.1f}"])
+        writer.writerow(['Total Cost (PLN)', f"{assignment_result.total_cost:,.0f}"])
+        writer.writerow(['Average Cost per Route (PLN)', f"{assignment_result.avg_cost_per_route:.2f}"])
+        writer.writerow(['Locations Used', placement_result.locations_used])
+        writer.writerow(['Processing Time (s)', f"{elapsed:.2f}"])
+        writer.writerow(['Routes per Second', f"{len(assignment_result.assignments)/elapsed:.1f}" if assignment_result.assignments and elapsed > 0 else "0.0"])
+    
     print(f"   ✓ CSV files exported successfully")
+    print(f"   • {assignments_file}")
+    print(f"   • {vehicle_states_file}")
+    print(f"   • {vehicles_processed_file}")
+    print(f"   • {routes_processed_file}")
+    print(f"   • {locations_processed_file}")
+    print(f"   • {summary_file}")
     
     print("\n" + "="*70)
     print("✨ Test complete!")
