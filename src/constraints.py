@@ -2,7 +2,7 @@
 Constraint validation functions.
 """
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Tuple, Dict
 from models import VehicleState, Route, AssignmentConfig
 from data_loader import get_relation
 
@@ -10,8 +10,8 @@ from data_loader import get_relation
 def is_time_feasible(
     vehicle_state: VehicleState,
     route: Route,
-    relation_lookup: dict
-) -> tuple[bool, str]:
+    relation_lookup: Dict
+) -> Tuple[bool, str]:
     """
     Check if vehicle can reach route start on time.
     
@@ -49,7 +49,7 @@ def check_service_need(
     vehicle_state: VehicleState,
     route: Route,
     config: AssignmentConfig
-) -> tuple[bool, int]:
+) -> Tuple[bool, int]:
     """
     Check if vehicle needs service before/after route.
     
@@ -65,7 +65,7 @@ def check_service_need(
 def check_contract_limit(
     vehicle_state: VehicleState,
     route: Route
-) -> tuple[bool, int]:
+) -> Tuple[bool, int]:
     """
     Check if route would violate lifetime contract limit (HARD constraint).
     
@@ -84,9 +84,9 @@ def check_contract_limit(
 def check_swap_policy(
     vehicle_state: VehicleState,
     route: Route,
-    relation_lookup: dict,
+    relation_lookup: Dict,
     config: AssignmentConfig
-) -> tuple[bool, int]:
+) -> Tuple[bool, int]:
     """
     Check if assigning this route would violate swap policy.
     
@@ -122,10 +122,10 @@ def check_swap_policy(
 def is_feasible(
     vehicle_state: VehicleState,
     route: Route,
-    relation_lookup: dict,
+    relation_lookup: Dict,
     config: AssignmentConfig,
     enforce_swap_policy: bool = True
-) -> tuple[bool, str]:
+) -> Tuple[bool, str]:
     """
     Comprehensive feasibility check.
     
@@ -157,9 +157,9 @@ def is_feasible(
 def validate_assignment(
     vehicle_state: VehicleState,
     route: Route,
-    relation_lookup: dict,
+    relation_lookup: Dict,
     config: AssignmentConfig
-) -> dict:
+) -> Dict:
     """
     Validate assignment and return detailed status.
     """

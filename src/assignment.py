@@ -15,6 +15,28 @@ from costs import calculate_assignment_cost, calculate_relocation_cost, calculat
 from data_loader import get_relation
 
 
+def filter_routes_by_lookahead(routes: List[Route], lookahead_days: int) -> List[Route]:
+    """
+    Filter routes to only include those within lookahead window.
+    
+    Args:
+        routes: All routes
+        lookahead_days: Number of days to include (0 = all routes)
+    
+    Returns:
+        Filtered list of routes
+    """
+    if lookahead_days <= 0 or not routes:
+        return routes
+    
+    start_date = routes[0].start_datetime
+    end_date = start_date + timedelta(days=lookahead_days)
+    
+    filtered = [r for r in routes if r.start_datetime < end_date]
+    
+    return filtered
+
+
 def initialize_vehicle_states(
     vehicles: List[Vehicle],
     start_date: datetime,
@@ -172,8 +194,50 @@ def find_best_vehicle_with_lookahead(
     if not feasible_vehicles:
         return None, float('inf'), 0.0
     
-    # Second pass: evaluate with look-ahead
-    for vehicle_id, state, immediate_cost in feasible_vehicles:
+    # Sort by immediate cost
+    feasible_vehicles.sort(key=lambda x: x[2])
+    
+    # OPTIMIZATION: Selective chain building
+    # Only build chains if there's a competitive decision to make
+    cheapest_cost = feasible_vehicles[0][2]
+    
+    # If chain depth is 0 or look_ahead_days is 0, skip chain building entirely
+    if config.chain_depth == 0 or config.look_ahead_days == 0:
+        best_vehicle = feasible_vehicles[0][0]
+        best_cost = feasible_vehicles[0][2]
+        return best_vehicle, best_cost, 0.0
+    
+    # If there's only one feasible vehicle, no need for chain building
+    if len(feasible_vehicles) == 1:
+        best_vehicle = feasible_vehicles[0][0]
+        best_cost = feasible_vehicles[0][2]
+        return best_vehicle, best_cost, 0.0
+    
+    # If the cheapest vehicle is MUCH cheaper than the second cheapest (>50% or >2000 PLN difference)
+    # then it's an obvious choice - skip chain building
+    if len(feasible_vehicles) > 1:
+        second_cheapest_cost = feasible_vehicles[1][2]
+        cost_diff = second_cheapest_cost - cheapest_cost
+        cost_ratio = cost_diff / (cheapest_cost + 1.0)  # Avoid division by zero
+        
+        if cost_diff > 2000.0 or cost_ratio > 0.5:
+            # Clear winner, no need to build chains
+            best_vehicle = feasible_vehicles[0][0]
+            best_cost = feasible_vehicles[0][2]
+            return best_vehicle, best_cost, 0.0
+    
+    # COMPETITIVE DECISION: Build chains only for top N cheapest vehicles
+    max_vehicles_to_evaluate = min(5, len(feasible_vehicles))  # Only top 5
+    
+    # Also filter by cost threshold: only evaluate vehicles within 20% of cheapest
+    cost_threshold = cheapest_cost * 1.20
+    vehicles_to_evaluate = [
+        (vid, state, cost) for vid, state, cost in feasible_vehicles[:max_vehicles_to_evaluate]
+        if cost <= cost_threshold
+    ]
+    
+    # Second pass: evaluate with look-ahead (ONLY for competitive vehicles)
+    for vehicle_id, state, immediate_cost in vehicles_to_evaluate:
         # Build future chain
         chain_score, chain_routes = build_future_route_chain(
             state, route, all_routes, route_index,
@@ -322,14 +386,32 @@ def assign_routes(
     print(f"    Chain depth: {config.chain_depth}")
     print(f"    Swap period: {config.swap_period_days} days")
     print(f"    Service tolerance: {config.service_tolerance_km} km")
+    print(f"    Assignment lookahead: {config.assignment_lookahead_days} days")
+    
+    # Keep ALL routes for chain building context
+    # But only ASSIGN routes within the lookahead window
+    all_routes_count = len(routes)
+    routes_to_assign = routes
+    
+    if config.assignment_lookahead_days > 0:
+        routes_to_assign = filter_routes_by_lookahead(routes, config.assignment_lookahead_days)
+        print(f"\n[*] Loaded {all_routes_count} total routes (for chain building context)")
+        print(f"[*] Will assign {len(routes_to_assign)}/{all_routes_count} routes within {config.assignment_lookahead_days} day window")
     
     # Initialize vehicle states
     start_date = routes[0].start_datetime if routes else datetime.now()
     vehicle_states = initialize_vehicle_states(vehicles, start_date, config)
     
-    print(f"\n[*] Initialized {len(vehicle_states)} vehicle states")
-    print(f"[*] Processing {len(routes)} routes...")
-    print(f"[*] Period: {routes[0].start_datetime.date()} to {routes[-1].start_datetime.date()}\n")
+    # Calculate period details
+    period_start = routes_to_assign[0].start_datetime if routes_to_assign else start_date
+    period_end = routes_to_assign[-1].start_datetime if routes_to_assign else start_date
+    period_days = (period_end - period_start).days + 1
+    
+    print(f"[*] Initialized {len(vehicle_states)} vehicle states")
+    print(f"[*] Assignment Period: {period_start.strftime('%Y-%m-%d')} to {period_end.strftime('%Y-%m-%d')} ({period_days} days)")
+    if config.assignment_lookahead_days > 0:
+        print(f"    └─ Limited by assignment_lookahead_days: {config.assignment_lookahead_days}")
+    print()
     
     assignments = []
     unassigned_routes = []
@@ -339,7 +421,7 @@ def assign_routes(
     day_count = 0
     routes_processed = 0
     
-    for route_index, route in enumerate(routes):
+    for route_index, route in enumerate(routes_to_assign):
         # Progress reporting
         route_day = route.start_datetime.date()
         if route_day != current_day:
@@ -350,8 +432,11 @@ def assign_routes(
                 print(f"[*] Progress: Day {day_count} ({current_day}) - {routes_processed} routes assigned")
         
         # Find best vehicle with look-ahead
+        # Pass ALL routes for chain building context, but we only assign routes_to_assign
+        # Need to find the actual index in the full routes list
+        full_route_index = routes.index(route)
         vehicle_id, cost, chain_score = find_best_vehicle_with_lookahead(
-            route, route_index, routes, vehicle_states,
+            route, full_route_index, routes, vehicle_states,
             relation_lookup, config
         )
         
@@ -383,6 +468,7 @@ def assign_routes(
     avg_cost = total_cost / len(assignments) if assignments else 0
     
     print(f"\n[*] Assignment Complete!")
+    print(f"    Period: {period_start.strftime('%Y-%m-%d')} to {period_end.strftime('%Y-%m-%d')} ({period_days} days)")
     print(f"    Routes assigned: {len(assignments)}")
     print(f"    Routes unassigned: {len(unassigned_routes)}")
     print(f"    Total relocations: {sum(s.total_relocations for s in vehicle_states.values())}")

@@ -1,17 +1,17 @@
 """
 Cost calculation functions for fleet optimization.
 """
-from typing import Optional
-from models import VehicleState, Route, AssignmentConfig, LocationRelation
+from typing import Optional, Tuple, Dict, List
+from models import VehicleState, Route, AssignmentConfig
 from data_loader import get_relation
 
 
 def calculate_relocation_cost(
     from_loc: int,
     to_loc: int,
-    relation_lookup: dict,
+    relation_lookup: Dict,
     config: AssignmentConfig
-) -> tuple[float, float, float]:
+) -> Tuple[float, float, float]:
     """
     Calculate cost to relocate vehicle between locations.
     
@@ -44,7 +44,7 @@ def calculate_overage_cost(
     km_driven_this_year: int,
     annual_limit_km: int,
     config: AssignmentConfig
-) -> tuple[float, int]:
+) -> Tuple[float, int]:
     """
     Calculate overage cost if annual limit exceeded.
     
@@ -63,10 +63,10 @@ def calculate_overage_cost(
 def calculate_assignment_cost(
     vehicle_state: VehicleState,
     route: Route,
-    relation_lookup: dict,
+    relation_lookup: Dict,
     config: AssignmentConfig,
     look_ahead_bonus: float = 0.0
-) -> tuple[float, dict]:
+) -> Tuple[float, Dict]:
     """
     Calculate total cost of assigning vehicle to route.
     
@@ -110,17 +110,20 @@ def calculate_assignment_cost(
 
 
 def calculate_placement_cost(
-    placements: dict,
-    routes: list,
-    relation_lookup: dict,
+    placements: Dict,
+    routes: List,
+    relation_lookup: Dict,
     config: AssignmentConfig,
     lookahead_days: int = 14
 ) -> float:
     """
     Estimate total relocation cost for initial placement.
     Used to evaluate placement quality.
+    
+    OPTIMIZED: Uses location-based heuristic instead of checking every vehicle.
     """
     from datetime import timedelta
+    from collections import Counter
     
     if not routes:
         return 0.0
@@ -130,27 +133,62 @@ def calculate_placement_cost(
     end_date = start_date + timedelta(days=lookahead_days)
     early_routes = [r for r in routes if r.start_datetime < end_date]
     
-    # Count relocations needed
-    placement_costs = []
-    location_by_vehicle = {v_id: loc_id for v_id, loc_id in placements.items()}
+    # Count vehicles at each location
+    location_vehicle_counts = Counter(placements.values())
     
-    # Simple estimation: assume uniform distribution of routes to vehicles
-    for route in early_routes:
-        if route.start_location_id:
-            # Find closest vehicle location
-            min_cost = float('inf')
-            for v_id, v_loc in location_by_vehicle.items():
-                cost, _, _ = calculate_relocation_cost(
-                    v_loc,
-                    route.start_location_id,
+    # Count demand at each location
+    location_demand = Counter(r.start_location_id for r in early_routes if r.start_location_id)
+    
+    # OPTIMIZATION: Only calculate cost for locations with demand mismatch
+    # Cache location-to-location costs to avoid recalculation
+    location_cost_cache = {}
+    
+    total_cost = 0.0
+    
+    for demand_loc, demand_count in location_demand.items():
+        vehicles_here = location_vehicle_counts.get(demand_loc, 0)
+        
+        if vehicles_here >= demand_count:
+            # Enough vehicles here, no relocations needed (optimistic)
+            continue
+        
+        # Need relocations - find cheapest source location
+        shortage = demand_count - vehicles_here
+        
+        # Find nearest location with spare vehicles
+        min_reloc_cost = float('inf')
+        
+        for source_loc, vehicle_count in location_vehicle_counts.items():
+            if source_loc == demand_loc:
+                continue
+            
+            # Check if this location has spare vehicles
+            source_demand = location_demand.get(source_loc, 0)
+            if vehicle_count <= source_demand:
+                continue  # No spare vehicles
+            
+            # Check cache first
+            cache_key = (source_loc, demand_loc)
+            if cache_key in location_cost_cache:
+                reloc_cost = location_cost_cache[cache_key]
+            else:
+                reloc_cost, _, _ = calculate_relocation_cost(
+                    source_loc,
+                    demand_loc,
                     relation_lookup,
                     config
                 )
-                if cost < min_cost:
-                    min_cost = cost
+                location_cost_cache[cache_key] = reloc_cost
             
-            if min_cost < 999999:
-                placement_costs.append(min_cost)
+            if reloc_cost < min_reloc_cost:
+                min_reloc_cost = reloc_cost
+        
+        # Add cost for shortage
+        if min_reloc_cost < 999999:
+            total_cost += shortage * min_reloc_cost
+        else:
+            # No path found, use high estimate
+            total_cost += shortage * 5000
     
-    return sum(placement_costs)
+    return total_cost
 

@@ -1,11 +1,12 @@
 """
-Data loading utilities for CSV files.
+Data loading utilities for CSV files and database.
 """
 import csv
 from datetime import datetime
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 from pathlib import Path
+import os
 
 from models import Vehicle, Location, LocationRelation, Route, Segment
 
@@ -22,7 +23,7 @@ def parse_datetime(dt_str: str) -> datetime:
             return datetime.strptime(dt_str, "%Y-%m-%d")
 
 
-def parse_optional_int(value: str) -> int | None:
+def parse_optional_int(value: str) -> Optional[int]:
     """Parse integer or return None for N/A"""
     if value == "N/A" or value == "" or value is None:
         return None
@@ -152,8 +153,21 @@ def load_routes(csv_path: str, segments_by_route: Dict[int, List[Segment]]) -> L
     return routes
 
 
-def load_all_data(data_dir: str) -> Tuple[List[Vehicle], List[Location], Dict, List[Route]]:
-    """Load all data from CSV files"""
+def load_all_data(data_dir: str = None) -> Tuple[List[Vehicle], List[Location], Dict, List[Route]]:
+    """
+    Load all data from database or CSV files.
+    If data_dir is None or DATABASE_URL is set, load from database.
+    Otherwise load from CSV files.
+    """
+    # Check if we should use database
+    if data_dir is None or os.getenv('DATABASE_URL') or os.getenv('USE_DATABASE') == '1':
+        print(f"\n[*] Loading data from database...")
+        from db_adapter import FleetDatabase
+        
+        with FleetDatabase() as db:
+            return db.load_all_data()
+    
+    # Otherwise load from CSV (backward compatibility)
     data_path = Path(data_dir)
     
     print(f"\n[*] Loading data from {data_dir}...")
@@ -170,7 +184,7 @@ def load_all_data(data_dir: str) -> Tuple[List[Vehicle], List[Location], Dict, L
     return vehicles, locations, relation_lookup, routes
 
 
-def get_relation(from_loc: int, to_loc: int, relation_lookup: Dict, use_pathfinding: bool = True) -> LocationRelation | None:
+def get_relation(from_loc: int, to_loc: int, relation_lookup: Dict, use_pathfinding: bool = True) -> Optional[LocationRelation]:
     """
     Get relation between two locations.
     If no direct relation exists, tries to find multi-hop path.

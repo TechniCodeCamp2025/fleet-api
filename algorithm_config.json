@@ -12,10 +12,10 @@
   "assignment": {
     "strategy": "greedy_with_lookahead",
     "assignment_lookahead_days": 14,
-    "look_ahead_days": 7,
-    "chain_depth": 5,
-    "chain_weight": 10.0,
-    "max_lookahead_routes": 100,
+    "look_ahead_days": 14,
+    "chain_depth": 10,
+    "chain_weight": 20.0,
+    "max_lookahead_routes": 200,
     "use_chain_optimization": true
   },
   

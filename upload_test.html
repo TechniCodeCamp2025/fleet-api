@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Optimization - File Upload Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .endpoint-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+
+        .endpoint-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .endpoint-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .endpoint-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-group {
+            margin-bottom: 20px;
+        }
+
+        .file-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .file-group label .required {
+            color: #e74c3c;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="file"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        input[type="file"]:hover {
+            border-color: #667eea;
+        }
+
+        input[type="file"].has-file {
+            border-color: #27ae60;
+            background-color: #f0fff4;
+        }
+
+        .file-status {
+            width: 24px;
+            height: 24px;
+            display: none;
+        }
+
+        .file-status.show {
+            display: block;
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 30px;
+        }
+
+        .upload-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .upload-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .upload-btn.loading {
+            background: #95a5a6;
+            cursor: wait;
+        }
+
+        .response-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .response-container.show {
+            display: block;
+        }
+
+        .response-container h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .response-content {
+            background: #fff;
+            padding: 15px;
+            border-radius: 6px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            border: 1px solid #e0e0e0;
+        }
+
+        .success {
+            color: #27ae60;
+            font-weight: 600;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-weight: 600;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin-bottom: 25px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+
+        .info-box strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚚 Fleet Optimization API</h1>
+        <p class="subtitle">Upload CSV files and config JSON to test the API endpoints</p>
+
+        <div class="info-box">
+            <strong>📡 API Endpoint:</strong>
+            <span id="api-url">http://localhost:8000</span> 
+            <span id="connection-status">Checking...</span>
+        </div>
+
+        <div class="endpoint-selector">
+            <button class="endpoint-btn active" data-endpoint="/upload/validate">
+                🔍 Validate Only
+            </button>
+            <button class="endpoint-btn" data-endpoint="/upload/process">
+                ⚙️ Validate & Process
+            </button>
+        </div>
+
+        <form id="upload-form">
+            <div class="file-group">
+                <label>
+                    📍 Locations CSV <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="locations" accept=".csv" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <label>
+                    🔗 Locations Relations CSV <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="locations_relations" accept=".csv" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <label>
+                    🛣️ Routes CSV <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="routes" accept=".csv" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <label>
+                    📏 Segments CSV <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="segments" accept=".csv" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <label>
+                    🚛 Vehicles CSV <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="vehicles" accept=".csv" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <div class="file-group">
+                <label>
+                    ⚙️ Algorithm Config JSON <span class="required">*</span>
+                </label>
+                <div class="file-input-wrapper">
+                    <input type="file" name="config" accept=".json" required>
+                    <span class="file-status">✅</span>
+                </div>
+            </div>
+
+            <button type="submit" class="upload-btn" id="submit-btn">
+                Upload Files
+            </button>
+        </form>
+
+        <div class="response-container" id="response-container">
+            <h3 id="response-title">Response</h3>
+            <div class="response-content" id="response-content"></div>
+        </div>
+
+        <div class="footer">
+            Check the server console for CSV previews! 
+            <br>
+            <a href="http://localhost:8000/docs" target="_blank">📖 API Documentation</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        let selectedEndpoint = '/upload/validate';
+
+        // Check API connection on load
+        async function checkConnection() {
+            const statusEl = document.getElementById('connection-status');
+            try {
+                const response = await fetch(API_BASE_URL);
+                if (response.ok) {
+                    statusEl.innerHTML = '<span class="success">✅ Connected</span>';
+                } else {
+                    statusEl.innerHTML = '<span class="error">⚠️ Server error</span>';
+                }
+            } catch (error) {
+                statusEl.innerHTML = '<span class="error">❌ Not connected</span>';
+            }
+        }
+
+        // Endpoint selector
+        document.querySelectorAll('.endpoint-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.endpoint-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedEndpoint = btn.dataset.endpoint;
+            });
+        });
+
+        // File input visual feedback
+        document.querySelectorAll('input[type="file"]').forEach(input => {
+            input.addEventListener('change', (e) => {
+                const statusIcon = e.target.parentElement.querySelector('.file-status');
+                if (e.target.files.length > 0) {
+                    e.target.classList.add('has-file');
+                    statusIcon.classList.add('show');
+                } else {
+                    e.target.classList.remove('has-file');
+                    statusIcon.classList.remove('show');
+                }
+            });
+        });
+
+        // Form submission
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submit-btn');
+            const responseContainer = document.getElementById('response-container');
+            const responseContent = document.getElementById('response-content');
+            const responseTitle = document.getElementById('response-title');
+
+            // Prepare form data
+            const formData = new FormData();
+            const fileInputs = e.target.querySelectorAll('input[type="file"]');
+            
+            fileInputs.forEach(input => {
+                if (input.files.length > 0) {
+                    formData.append(input.name, input.files[0]);
+                }
+            });
+
+            // Update UI to loading state
+            submitBtn.disabled = true;
+            submitBtn.classList.add('loading');
+            submitBtn.innerHTML = '<span class="loading-spinner"></span> Uploading...';
+            responseContainer.classList.remove('show');
+
+            try {
+                const response = await fetch(API_BASE_URL + selectedEndpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                // Show response
+                responseContainer.classList.add('show');
+                
+                if (response.ok) {
+                    responseTitle.innerHTML = '<span class="success">✅ Success</span>';
+                    responseContent.textContent = JSON.stringify(data, null, 2);
+                } else {
+                    responseTitle.innerHTML = '<span class="error">❌ Error</span>';
+                    responseContent.textContent = JSON.stringify(data, null, 2);
+                }
+
+            } catch (error) {
+                responseContainer.classList.add('show');
+                responseTitle.innerHTML = '<span class="error">❌ Request Failed</span>';
+                responseContent.textContent = `Error: ${error.message}\n\nMake sure the API server is running:\npython src/main.py`;
+            } finally {
+                // Reset button
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.textContent = 'Upload Files';
+            }
+        });
+
+        // Check connection on page load
+        checkConnection();
+    </script>
+</body>
+</html>
+

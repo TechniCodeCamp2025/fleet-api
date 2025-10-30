@@ -206,7 +206,7 @@ def test_assignment(config_path='algorithm_config.json'):
                 location.id,
                 location.name,
                 location.lat,
-                location.lon,
+                location.long,
                 1 if location.is_hub else 0
             ])
     

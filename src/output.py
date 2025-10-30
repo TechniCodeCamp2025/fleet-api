@@ -1,13 +1,19 @@
 """
 Output generation for optimization results.
+Supports both CSV and database output.
 """
 import csv
 import json
 from pathlib import Path
 from typing import List, Dict
 from datetime import datetime
+import os
+from rich.console import Console
+from rich.table import Table
 
 from models import RouteAssignment, VehicleState, PlacementResult, AssignmentResult
+
+console = Console()
 
 
 def write_assignments_csv(
@@ -47,7 +53,7 @@ def write_assignments_csv(
                 f"{a.chain_score:.4f}"
             ])
     
-    print(f"[✓] Written {len(assignments)} assignments to {output_path}")
+    console.print(f"[green]✓[/green] Written {len(assignments)} assignments to [cyan]{output_path}[/cyan]")
 
 
 def write_vehicle_states_csv(
@@ -83,7 +89,7 @@ def write_vehicle_states_csv(
                 state.km_since_last_service, service_due
             ])
     
-    print(f"[✓] Written {len(vehicle_states)} vehicle states to {output_path}")
+    console.print(f"[green]✓[/green] Written {len(vehicle_states)} vehicle states to [cyan]{output_path}[/cyan]")
 
 
 def write_vehicles_with_placement_csv(
@@ -124,7 +130,7 @@ def write_vehicles_with_placement_csv(
                 assigned_location
             ])
     
-    print(f"[✓] Written {len(vehicles)} vehicles with placement to {output_path}")
+    console.print(f"[green]✓[/green] Written {len(vehicles)} vehicles with placement to [cyan]{output_path}[/cyan]")
 
 
 def write_placement_report(
@@ -158,7 +164,7 @@ def write_placement_report(
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(report, f, indent=2)
     
-    print(f"[✓] Written placement report to {output_path}")
+    console.print(f"[green]✓[/green] Written placement report to [cyan]{output_path}[/cyan]")
 
 
 def write_summary_statistics(
@@ -240,31 +246,139 @@ def write_summary_statistics(
     with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(summary, f, indent=2)
     
-    print(f"[✓] Written summary statistics to {output_path}")
+    console.print(f"[green]✓[/green] Written summary statistics to [cyan]{output_path}[/cyan]")
     
-    # Print key metrics
-    print("\n" + "="*60)
-    print("SUMMARY STATISTICS")
-    print("="*60)
-    print(f"\n📊 Routes:")
-    print(f"   Total: {summary['routes']['total_routes']}")
-    print(f"   Assigned: {summary['routes']['routes_assigned']} ({summary['routes']['assignment_rate']})")
-    print(f"\n💰 Costs:")
-    print(f"   Total: {summary['costs']['total_cost_pln']:,.2f} PLN")
-    print(f"   Relocation: {summary['costs']['relocation_cost_pln']:,.2f} PLN ({summary['costs']['cost_breakdown']['relocation_percentage']})")
-    print(f"   Overage: {summary['costs']['overage_cost_pln']:,.2f} PLN ({summary['costs']['cost_breakdown']['overage_percentage']})")
-    print(f"   Avg per route: {summary['costs']['avg_cost_per_route_pln']:.2f} PLN")
-    print(f"\n🚚 Vehicles:")
-    print(f"   Total: {summary['vehicles']['total_vehicles']}")
-    print(f"   Over limit: {summary['vehicles']['vehicles_over_annual_limit']} ({summary['vehicles']['vehicles_over_limit_percentage']})")
-    print(f"   Avg routes/vehicle: {summary['vehicles']['avg_routes_per_vehicle']}")
-    print(f"\n🔄 Relocations:")
-    print(f"   Total: {summary['relocations']['total_relocations']}")
-    print(f"   Ratio: {summary['relocations']['relocation_ratio']}")
-    print(f"\n⏱️  Performance:")
-    print(f"   Runtime: {summary['execution']['runtime_minutes']:.1f} minutes")
-    print(f"   Speed: {summary['execution']['routes_per_second']:.1f} routes/second")
-    print("\n" + "="*60 + "\n")
+    # Print key metrics in a nice table
+    console.print("\n[bold cyan]SUMMARY STATISTICS[/bold cyan]")
+    
+    # Routes table
+    routes_table = Table(title="Routes", show_header=False, box=None, padding=(0, 2))
+    routes_table.add_column("Metric", style="cyan")
+    routes_table.add_column("Value", style="white")
+    routes_table.add_row("Total", str(summary['routes']['total_routes']))
+    routes_table.add_row("Assigned", f"{summary['routes']['routes_assigned']} ({summary['routes']['assignment_rate']})")
+    console.print(routes_table)
+    
+    # Costs table
+    costs_table = Table(title="Costs", show_header=False, box=None, padding=(0, 2))
+    costs_table.add_column("Metric", style="cyan")
+    costs_table.add_column("Value", style="green")
+    costs_table.add_row("Total", f"{summary['costs']['total_cost_pln']:,.2f} PLN")
+    costs_table.add_row("Relocation", f"{summary['costs']['relocation_cost_pln']:,.2f} PLN ({summary['costs']['cost_breakdown']['relocation_percentage']})")
+    costs_table.add_row("Overage", f"{summary['costs']['overage_cost_pln']:,.2f} PLN ({summary['costs']['cost_breakdown']['overage_percentage']})")
+    costs_table.add_row("Avg/route", f"{summary['costs']['avg_cost_per_route_pln']:.2f} PLN")
+    console.print(costs_table)
+    
+    # Vehicles table
+    vehicles_table = Table(title="Vehicles", show_header=False, box=None, padding=(0, 2))
+    vehicles_table.add_column("Metric", style="cyan")
+    vehicles_table.add_column("Value", style="white")
+    vehicles_table.add_row("Total", str(summary['vehicles']['total_vehicles']))
+    vehicles_table.add_row("Over limit", f"{summary['vehicles']['vehicles_over_annual_limit']} ({summary['vehicles']['vehicles_over_limit_percentage']})")
+    vehicles_table.add_row("Avg routes", str(summary['vehicles']['avg_routes_per_vehicle']))
+    console.print(vehicles_table)
+    
+    # Relocations and Performance
+    misc_table = Table(title="Relocations & Performance", show_header=False, box=None, padding=(0, 2))
+    misc_table.add_column("Metric", style="cyan")
+    misc_table.add_column("Value", style="white")
+    misc_table.add_row("Total relocations", str(summary['relocations']['total_relocations']))
+    misc_table.add_row("Relocation ratio", summary['relocations']['relocation_ratio'])
+    misc_table.add_row("Runtime", f"{summary['execution']['runtime_minutes']:.1f} minutes")
+    misc_table.add_row("Speed", f"{summary['execution']['routes_per_second']:.1f} routes/second")
+    console.print(misc_table)
+    console.print()
+
+
+def save_placement_results(
+    placement_result: PlacementResult,
+    vehicles: List = None,
+    run_id: int = None
+) -> int:
+    """
+    Save placement results to database.
+    
+    Args:
+        placement_result: Placement algorithm result
+        vehicles: List of vehicles with placement applied
+        run_id: Algorithm run ID for database tracking
+    
+    Returns:
+        run_id if saved to database
+    """
+    from db_adapter import FleetDatabase
+    
+    console.print("[dim]Saving placement results to database...[/dim]")
+    
+    with FleetDatabase() as db:
+        if run_id is None:
+            # Start a new run if not provided
+            run_id = db.start_algorithm_run(config={'algorithm': 'placement'})
+        
+        # Save vehicle placements to database
+        # Update vehicle current locations
+        for vehicle_id, location_id in placement_result.placements.items():
+            db.cursor.execute(
+                "UPDATE vehicles SET current_location_id = ? WHERE id = ?",
+                (location_id, vehicle_id)
+            )
+        
+        db.conn.commit()
+        
+        # Complete the run
+        db.complete_algorithm_run(
+            run_id,
+            routes_processed=0,  # Placement doesn't process routes
+            assignments_created=0,
+            total_cost=placement_result.total_cost
+        )
+    
+    console.print(f"[green]✓[/green] Placement results saved to database (run_id=[cyan]{run_id}[/cyan])")
+    return run_id
+
+
+def save_assignment_results(
+    assignment_result: AssignmentResult,
+    vehicles: List = None,
+    run_id: int = None
+) -> int:
+    """
+    Save assignment results to database.
+    
+    Args:
+        assignment_result: Assignment algorithm result
+        vehicles: List of vehicles with assignments
+        run_id: Algorithm run ID for database tracking
+    
+    Returns:
+        run_id if saved to database
+    """
+    from db_adapter import FleetDatabase
+    
+    console.print("[dim]Saving assignment results to database...[/dim]")
+    
+    with FleetDatabase() as db:
+        if run_id is None:
+            # Start a new run if not provided
+            run_id = db.start_algorithm_run(config={'algorithm': 'assignment'})
+        
+        # Save all assignments and vehicle states
+        db.save_all_results(
+            assignment_result.assignments,
+            assignment_result.vehicle_states,
+            run_id
+        )
+        
+        # Complete the run
+        db.complete_algorithm_run(
+            run_id,
+            routes_processed=assignment_result.routes_assigned + assignment_result.routes_unassigned,
+            assignments_created=assignment_result.routes_assigned,
+            total_cost=assignment_result.total_cost
+        )
+    
+    console.print(f"[green]✓[/green] Assignment results saved to database (run_id=[cyan]{run_id}[/cyan])")
+    return run_id
 
 
 def save_all_results(
@@ -272,16 +386,53 @@ def save_all_results(
     assignment_result: AssignmentResult,
     output_dir: str,
     runtime_seconds: float,
-    vehicles: List = None
-) -> None:
-    """Save all results to output directory"""
+    vehicles: List = None,
+    run_id: int = None
+) -> int:
+    """
+    Save all results to database and/or output directory.
+    If run_id is provided or USE_DATABASE env var is set, save to database.
+    Otherwise save to CSV files.
+    
+    Returns:
+        run_id if saved to database, None if saved to CSV
+    """
+    # If run_id provided or USE_DATABASE set, save to database
+    if run_id is not None or os.getenv('USE_DATABASE') == '1':
+        console.print("[dim]Saving results to database...[/dim]")
+        from db_adapter import FleetDatabase
+        
+        with FleetDatabase() as db:
+            if run_id is None:
+                # Start a new run if not provided
+                run_id = db.start_algorithm_run()
+            
+            # Save all assignments and vehicle states
+            db.save_all_results(
+                assignment_result.assignments,
+                assignment_result.vehicle_states,
+                run_id
+            )
+            
+            # Complete the run
+            db.complete_algorithm_run(
+                run_id,
+                routes_processed=assignment_result.routes_assigned + assignment_result.routes_unassigned,
+                assignments_created=assignment_result.routes_assigned,
+                total_cost=assignment_result.total_cost
+            )
+        
+        console.print(f"[green]✓[/green] Results saved to database (run_id=[cyan]{run_id}[/cyan])")
+        return run_id
+    
+    # Otherwise save to CSV (backward compatibility)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Generate timestamp for this run
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    print(f"\n[*] Saving results to {output_dir}/...")
+    console.print(f"\n[dim]Saving results to {output_dir}/...[/dim]")
     
     # Save vehicles with placement (new CSV for assignment input)
     if vehicles:
@@ -317,5 +468,6 @@ def save_all_results(
         runtime_seconds
     )
     
-    print(f"\n[✓] All results saved successfully!")
+    console.print(f"\n[bold green]✓ All results saved successfully![/bold green]")
+    return None
 

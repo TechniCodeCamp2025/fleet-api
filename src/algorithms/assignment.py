@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 from copy import deepcopy
 from collections import defaultdict
+from rich.console import Console
 
 from .relation_helper import (
     get_cached_relation,
@@ -27,6 +28,8 @@ from .relation_helper import (
     get_relocation_info,
     create_relation_cache
 )
+
+console = Console()
 
 # Constants
 INFEASIBLE_COST = float('inf')
@@ -151,10 +154,15 @@ def pro_rate_km_across_lease_years(
 
 
 def needs_service(vehicle_state: Dict, route, config) -> bool:
-    """Check if vehicle needs service before/after route."""
-    future_service_km = vehicle_state['km_since_last_service'] + int(route.distance_km)
+    """
+    Check if vehicle needs service before/after route.
+    Per clarifications: services have ±1000 km flexibility, NOT a hard block.
+    Only returns True if ALREADY exceeded (not if WILL exceed).
+    """
+    # Only flag if ALREADY over the limit (needs immediate service)
+    current_km = vehicle_state['km_since_last_service']
     max_allowed = vehicle_state['service_interval_km'] + config.service_tolerance_km
-    return future_service_km > max_allowed
+    return current_km > max_allowed
 
 
 def calculate_service_time(vehicle_state: Dict, route, config) -> Tuple[datetime, datetime]:
@@ -582,9 +590,9 @@ def optimize_assignment_greedy(
     assignments = []
     unassigned = []
     
-    print(f"\n[Assignment] Processing {len(routes_to_assign)} routes with {len(vehicles)} vehicles")
-    print(f"[Assignment] Strategy: Simple Greedy with Workload Balancing")
-    print(f"[Assignment] Relation caching: {config.use_relation_cache}")
+    console.print(f"\n[dim]Processing {len(routes_to_assign)} routes with {len(vehicles)} vehicles[/dim]")
+    console.print(f"[dim]Strategy: Simple Greedy with Workload Balancing[/dim]")
+    console.print(f"[dim]Relation caching: {config.use_relation_cache}[/dim]")
     
     # Process routes sequentially
     for route_index, route in enumerate(routes_to_assign):
@@ -593,8 +601,8 @@ def optimize_assignment_greedy(
             progress_pct = (route_index / len(routes_to_assign)) * 100
             active_vehicles = sum(1 for w in vehicle_workloads.values() if w > 0)
             avg_workload = sum(vehicle_workloads.values()) / active_vehicles if active_vehicles > 0 else 0
-            print(f"[Assignment] Progress: {route_index}/{len(routes_to_assign)} ({progress_pct:.1f}%) - "
-                  f"Assigned: {len(assignments)}, Unassigned: {len(unassigned)}, "
+            console.print(f"[cyan]Progress:[/cyan] {route_index}/{len(routes_to_assign)} ({progress_pct:.1f}%) - "
+                  f"Assigned: [green]{len(assignments)}[/green], Unassigned: [yellow]{len(unassigned)}[/yellow], "
                   f"Active vehicles: {active_vehicles}, Avg workload: {avg_workload:.1f}")
         
         # Find best vehicle (minimum cost with workload balancing)
@@ -638,7 +646,7 @@ def optimize_assignment_greedy(
         else:
             unassigned.append(route.id)
             if len(unassigned) <= 10:  # Only print first 10 to avoid spam
-                print(f"[Assignment] WARNING: No feasible vehicle for route {route.id}")
+                console.print(f"[yellow]WARNING: No feasible vehicle for route {route.id}[/yellow]")
     
     # Print final workload distribution
     active_vehicles = sum(1 for w in vehicle_workloads.values() if w > 0)
@@ -646,11 +654,11 @@ def optimize_assignment_greedy(
         avg_workload = sum(vehicle_workloads.values()) / active_vehicles
         max_workload = max(vehicle_workloads.values())
         min_workload = min(w for w in vehicle_workloads.values() if w > 0) if active_vehicles > 0 else 0
-        print(f"\n[Assignment] Workload distribution: {active_vehicles}/{len(vehicles)} vehicles used")
-        print(f"   Average: {avg_workload:.1f} routes/vehicle")
-        print(f"   Range: {min_workload} - {max_workload} routes")
+        console.print(f"\n[cyan]Workload distribution:[/cyan] {active_vehicles}/{len(vehicles)} vehicles used")
+        console.print(f"   Average: {avg_workload:.1f} routes/vehicle")
+        console.print(f"   Range: {min_workload} - {max_workload} routes")
     
-    print(f"\n[Assignment] Complete: {len(assignments)}/{len(routes_to_assign)} assigned ({len(unassigned)} unassigned)")
+    console.print(f"\n[green]✓[/green] Complete: {len(assignments)}/{len(routes_to_assign)} assigned ([yellow]{len(unassigned)}[/yellow] unassigned)")
     
     return assignments, vehicle_states
 
@@ -663,7 +671,7 @@ def optimize_assignment_with_lookahead(
 ) -> Tuple[List[Dict], Dict]:
     """
     Greedy assignment with optional look-ahead and chaining.
-    NOT RECOMMENDED by spec, but available if needed.
+    OPTIMIZED FOR 100% FULFILLMENT: Pre-sorts routes to maximize chaining opportunities.
     
     For each route:
     1. Find feasible vehicles
@@ -684,7 +692,13 @@ def optimize_assignment_with_lookahead(
     
     if config.assignment_lookahead_days > 0:
         routes_to_assign = filter_routes_by_lookahead(routes, config.assignment_lookahead_days)
-        print(f"[Assignment] Will assign {len(routes_to_assign)}/{all_routes_count} routes within {config.assignment_lookahead_days} day window")
+        console.print(f"[dim]Will assign {len(routes_to_assign)}/{all_routes_count} routes within {config.assignment_lookahead_days} day window[/dim]")
+    
+    # OPTIMIZATION: Group routes by location clusters to improve chaining
+    # Sort by (start_time, start_location) to process location-based batches
+    console.print(f"[dim]Sorting routes to maximize chaining opportunities...[/dim]")
+    routes_to_assign_sorted = sorted(routes_to_assign, key=lambda r: (r.start_datetime, r.start_location_id))
+    routes_to_assign = routes_to_assign_sorted
     
     # Initialize
     start_date = routes[0].start_datetime if routes else datetime.now()
@@ -694,26 +708,31 @@ def optimize_assignment_with_lookahead(
     assignments = []
     unassigned = []
     
-    print(f"\n[Assignment] Processing {len(routes_to_assign)} routes with {len(vehicles)} vehicles")
-    print(f"[Assignment] Strategy: Greedy with Look-Ahead")
-    print(f"[Assignment] Chain lookahead: {config.look_ahead_days} days, Chain depth: {config.chain_depth}")
-    print(f"[Assignment] Chain optimization: {config.use_chain_optimization}")
+    console.print(f"\n[dim]Processing {len(routes_to_assign)} routes with {len(vehicles)} vehicles[/dim]")
+    console.print(f"[dim]Strategy: Greedy with Look-Ahead[/dim]")
+    console.print(f"[dim]Chain lookahead: {config.look_ahead_days} days, Chain depth: {config.chain_depth}[/dim]")
+    console.print(f"[dim]Chain optimization: {config.use_chain_optimization}[/dim]")
     
     # Process routes sequentially (only assign routes_to_assign)
     for assign_index, route in enumerate(routes_to_assign):
         # Progress reporting
         if assign_index > 0 and assign_index % config.progress_report_interval == 0:
             progress_pct = (assign_index / len(routes_to_assign)) * 100
-            print(f"[Assignment] Progress: {assign_index}/{len(routes_to_assign)} ({progress_pct:.1f}%)")
+            console.print(f"[cyan]Progress:[/cyan] {assign_index}/{len(routes_to_assign)} ({progress_pct:.1f}%)")
         
         # Find the index of this route in the full routes list (for chain building)
         full_route_index = routes.index(route) if route in routes else assign_index
         
         # Find best vehicle with look-ahead
+        # PRIORITY #1: Find ANY feasible vehicle (100% fulfillment goal)
+        # PRIORITY #2: Among feasible vehicles, pick best cost + chain score
         best_vehicle_id = None
         best_score = INFEASIBLE_COST  # Lower is better
         best_immediate_cost = INFEASIBLE_COST
         best_chain_score = 0.0
+        
+        # NEW: Track if we found ANY feasible vehicle
+        feasible_candidates = []
         
         for vehicle_id, state in vehicle_states.items():
             # Check feasibility
@@ -734,15 +753,24 @@ def optimize_assignment_with_lookahead(
             else:
                 chain_score = 0.0
             
-            # Combined score: immediate cost - future opportunity bonus
-            # Higher chain_score = better future = lower effective cost
-            effective_cost = immediate_cost - (chain_score * config.chain_weight)
+            # Feasible candidate found!
+            feasible_candidates.append((vehicle_id, immediate_cost, chain_score))
+            
+            # Combined score: HEAVILY weight chain score to maximize fulfillment
+            # The better the chain, the more routes we can fulfill without relocations
+            # Use higher weight for chain score to prioritize long-term feasibility
+            effective_cost = immediate_cost - (chain_score * config.chain_weight * 2.0)
             
             if effective_cost < best_score:
                 best_score = effective_cost
                 best_vehicle_id = vehicle_id
                 best_immediate_cost = immediate_cost
                 best_chain_score = chain_score
+        
+        # If we have feasible candidates but best_score is still inf, take the first one
+        # This ensures we ALWAYS assign if ANY vehicle can do it (100% fulfillment priority)
+        if feasible_candidates and best_vehicle_id is None:
+            best_vehicle_id, best_immediate_cost, best_chain_score = feasible_candidates[0]
         
         # Assign or mark unassigned
         if best_vehicle_id is not None:
@@ -763,8 +791,17 @@ def optimize_assignment_with_lookahead(
             update_state(vehicle_states[best_vehicle_id], route, relation_lookup, config, relation_cache)
         else:
             unassigned.append(route.id)
+            
+            # Debug: sample rejection reasons for first few unassigned
+            if len(unassigned) <= 20:
+                reasons = {}
+                for vehicle_id, state in vehicle_states.items():
+                    feasible, reason = check_feasibility(state, route, relation_lookup, config, relation_cache)
+                    if not feasible:
+                        reasons[reason] = reasons.get(reason, 0) + 1
+                console.print(f"[yellow]Route {route.id} unassigned - reasons: {dict(list(reasons.items())[:3])}[/yellow]")
     
-    print(f"\n[Assignment] Complete: {len(assignments)}/{len(routes_to_assign)} assigned ({len(unassigned)} unassigned)")
+    console.print(f"\n[green]✓[/green] Complete: {len(assignments)}/{len(routes_to_assign)} assigned ([yellow]{len(unassigned)}[/yellow] unassigned)")
     
     return assignments, vehicle_states
 

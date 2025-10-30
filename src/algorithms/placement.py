@@ -10,6 +10,9 @@ from typing import List, Dict, Tuple
 from datetime import timedelta
 from collections import defaultdict
 import numpy as np
+from rich.console import Console
+
+console = Console()
 
 
 def analyze_demand(routes: List, lookahead_days: int = 14) -> Dict[int, int]:
@@ -399,10 +402,11 @@ def coverage_first_assignment(
     location_counts = defaultdict(int)
     vehicle_index = 0
     
-    # Phase 1: Ensure minimum coverage - at least 1 vehicle per location
-    # But only if we have enough vehicles
+    # Phase 1: MAXIMUM COVERAGE - spread vehicles as widely as possible
+    # For 100% fulfillment, we need vehicles everywhere
+    # Only concentrate if we have more vehicles than locations
     if n_locations <= n_vehicles:
-        print(f"[Placement] Phase 1: Distributing 1 vehicle to each of {n_locations} locations")
+        console.print(f"[dim]Phase 1: Full coverage - 1 vehicle to each of {n_locations} locations[/dim]")
         for loc_id, _ in sorted_locations:
             if vehicle_index >= n_vehicles:
                 break
@@ -410,10 +414,10 @@ def coverage_first_assignment(
             location_counts[loc_id] += 1
             vehicle_index += 1
     else:
-        # Too many locations, prioritize high-demand ones
-        high_priority = min(n_vehicles // 2, n_locations)
-        print(f"[Placement] Phase 1: Covering top {high_priority} high-demand locations")
-        for loc_id, _ in sorted_locations[:high_priority]:
+        # More locations than vehicles - cover ALL vehicles worth (100% spread)
+        # Prioritize by demand but spread maximally
+        console.print(f"[dim]Phase 1: Maximum spread - 1 vehicle to each of top {n_vehicles} locations[/dim]")
+        for loc_id, _ in sorted_locations[:n_vehicles]:
             if vehicle_index >= n_vehicles:
                 break
             placement[vehicles[vehicle_index].id] = loc_id
@@ -423,7 +427,7 @@ def coverage_first_assignment(
     # Phase 2: Distribute remaining vehicles proportionally to demand
     remaining = n_vehicles - vehicle_index
     if remaining > 0:
-        print(f"[Placement] Phase 2: Distributing {remaining} remaining vehicles proportionally")
+        console.print(f"[dim]Phase 2: Distributing {remaining} remaining vehicles proportionally[/dim]")
         total_demand = sum(demand.values())
         max_per_location = max(3, int(n_vehicles * max_concentration))
         
@@ -453,15 +457,15 @@ def coverage_first_assignment(
     
     # Phase 3: Assign any stragglers to top locations
     if vehicle_index < n_vehicles:
-        print(f"[Placement] Phase 3: Assigning {n_vehicles - vehicle_index} remaining to top locations")
+        console.print(f"[dim]Phase 3: Assigning {n_vehicles - vehicle_index} remaining to top locations[/dim]")
         while vehicle_index < n_vehicles:
             top_location = sorted_locations[0][0]
             placement[vehicles[vehicle_index].id] = top_location
             location_counts[top_location] += 1
             vehicle_index += 1
     
-    print(f"[Placement] Final: {len(location_counts)} locations used, "
-          f"max {max(location_counts.values())} vehicles at one location")
+    console.print(f"[dim]Final: {len(location_counts)} locations used, "
+          f"max {max(location_counts.values())} vehicles at one location[/dim]")
     
     return placement
 
