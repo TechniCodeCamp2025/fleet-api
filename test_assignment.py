@@ -6,14 +6,16 @@ import sys
 import time
 import json
 from pathlib import Path
+from datetime import datetime
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
 from data_loader import load_all_data
-from models import AssignmentConfig
-from algorithms.placement import optimize_placement
-from algorithms.assignment import optimize_assignment
+from models import AssignmentConfig, PlacementResult, AssignmentResult
+from placement import calculate_placement, apply_placement_to_vehicles
+from assignment import assign_routes
+from output import write_assignments_csv, write_vehicle_states_csv
 
 
 def load_config_from_file(config_path='algorithm_config.json'):
@@ -97,15 +99,12 @@ def test_assignment(config_path='algorithm_config.json'):
     # Run placement
     print(f"\n[3/5] Running placement algorithm...")
     start = time.time()
-    placement, quality = optimize_placement(
-        vehicles, routes, relation_lookup, config, strategy=config.placement_strategy
+    placement_result = calculate_placement(
+        vehicles, routes, locations, relation_lookup, config
     )
-    # Apply placement
-    for vehicle in vehicles:
-        if vehicle.id in placement:
-            vehicle.current_location_id = placement[vehicle.id]
+    apply_placement_to_vehicles(vehicles, placement_result.placements)
     print(f"   ✓ Completed in {time.time()-start:.2f}s")
-    print(f"   • {quality['locations_used']} locations used")
+    print(f"   • {placement_result.locations_used} locations used")
     
     # Run assignment
     print(f"\n[4/5] Running assignment algorithm...")
@@ -114,32 +113,32 @@ def test_assignment(config_path='algorithm_config.json'):
     else:
         print(f"   Strategy: {config.assignment_strategy} (simple greedy, spec-compliant)")
     start = time.time()
-    assignments, final_states = optimize_assignment(
+    assignment_result = assign_routes(
         vehicles, routes, relation_lookup, config
     )
     elapsed = time.time() - start
     print(f"   ✓ Completed in {elapsed:.2f}s")
-    if assignments:
-        print(f"   • Speed: {len(assignments)/elapsed:.1f} routes/second")
+    if assignment_result.assignments:
+        print(f"   • Speed: {len(assignment_result.assignments)/elapsed:.1f} routes/second")
     
     # Calculate statistics
     print(f"\n[5/5] Results:")
-    print(f"   Routes assigned: {len(assignments)}/{len(routes)} ({len(assignments)/len(routes)*100:.1f}%)")
-    print(f"   Routes unassigned: {len(routes) - len(assignments)}")
+    print(f"   Routes assigned: {assignment_result.routes_assigned}/{len(routes)} ({assignment_result.routes_assigned/len(routes)*100:.1f}%)")
+    print(f"   Routes unassigned: {assignment_result.routes_unassigned}")
     
     # Relocation stats
-    relocations = sum(1 for a in assignments if a['requires_relocation'])
-    print(f"\n   Relocations: {relocations} ({relocations/len(assignments)*100:.1f}%)")
+    relocations = sum(1 for a in assignment_result.assignments if a.requires_relocation)
+    print(f"\n   Relocations: {relocations} ({relocations/len(assignment_result.assignments)*100:.1f}%)")
     
     # Chain score stats
-    chain_scores = [a.get('chain_score', 0) for a in assignments]
+    chain_scores = [a.chain_score for a in assignment_result.assignments]
     avg_chain_score = sum(chain_scores) / len(chain_scores) if chain_scores else 0
     print(f"   Avg chain score: {avg_chain_score:.3f}")
     
     # Vehicle utilization
     routes_per_vehicle = {}
-    for a in assignments:
-        vid = a['vehicle_id']
+    for a in assignment_result.assignments:
+        vid = a.vehicle_id
         routes_per_vehicle[vid] = routes_per_vehicle.get(vid, 0) + 1
     
     utilized = len(routes_per_vehicle)
@@ -148,16 +147,27 @@ def test_assignment(config_path='algorithm_config.json'):
     print(f"   Avg routes per vehicle: {avg_routes:.1f}")
     
     # Cost estimates
-    total_cost = sum(a.get('cost', 0) for a in assignments)
-    avg_cost = total_cost / len(assignments) if assignments else 0
-    print(f"\n   Estimated total cost: {total_cost:,.0f} PLN")
-    print(f"   Avg cost per route: {avg_cost:.2f} PLN")
+    print(f"\n   Estimated total cost: {assignment_result.total_cost:,.0f} PLN")
+    print(f"   Avg cost per route: {assignment_result.avg_cost_per_route:.2f} PLN")
+    
+    # Export CSV files
+    print(f"\n[6/6] Exporting results to CSV...")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    assignments_file = f"output/assignments_{timestamp}.csv"
+    Path("output").mkdir(parents=True, exist_ok=True)
+    write_assignments_csv(assignment_result.assignments, assignments_file)
+    
+    vehicle_states_file = f"output/vehicle_states_{timestamp}.csv"
+    write_vehicle_states_csv(assignment_result.vehicle_states, vehicle_states_file)
+    
+    print(f"   ✓ CSV files exported successfully")
     
     print("\n" + "="*70)
     print("✨ Test complete!")
     print("="*70 + "\n")
     
-    return assignments, final_states
+    return assignment_result.assignments, assignment_result.vehicle_states
 
 
 if __name__ == '__main__':
