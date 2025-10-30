@@ -1,0 +1,35 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "reload": true,
+    "workers": 1
+  },
+  "database": {
+    "pool_size": 5,
+    "max_overflow": 10,
+    "pool_timeout": 30,
+    "pool_recycle": 3600,
+    "echo": false
+  },
+  "api": {
+    "title": "Fleet Backend API",
+    "description": "A FastAPI backend service with database integration",
+    "version": "0.1.0",
+    "prefix": "/api/v1",
+    "docs_url": "/docs",
+    "redoc_url": "/redoc"
+  },
+  "cors": {
+    "enabled": true,
+    "allow_origins": ["http://localhost:3000"],
+    "allow_credentials": true,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"]
+  },
+  "logging": {
+    "level": "INFO",
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  }
+}
+
