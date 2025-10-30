@@ -1,0 +1,39 @@
+{
+  "data_dir": "data",
+  "output_dir": "output",
+  
+  "placement": {
+    "lookahead_days": 14,
+    "strategy": "proportional",
+    "max_concentration": 0.30
+  },
+  
+  "assignment": {
+    "strategy": "greedy_with_lookahead",
+    "look_ahead_days": 7,
+    "chain_depth": 3
+  },
+  
+  "swap_policy": {
+    "max_swaps_per_period": 1,
+    "swap_period_days": 90
+  },
+  
+  "service_policy": {
+    "service_tolerance_km": 1000,
+    "service_duration_hours": 48,
+    "service_penalty_pln": 500.0
+  },
+  
+  "costs": {
+    "relocation_base_cost_pln": 1000.0,
+    "relocation_per_km_pln": 1.0,
+    "relocation_per_hour_pln": 150.0,
+    "overage_per_km_pln": 0.92
+  },
+  
+  "performance": {
+    "progress_report_days": 30
+  }
+}
+

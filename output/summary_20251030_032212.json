@@ -1,0 +1,40 @@
+{
+  "execution": {
+    "runtime_seconds": 3.59,
+    "runtime_minutes": 0.06,
+    "routes_per_second": 240.78
+  },
+  "routes": {
+    "total_routes": 1000,
+    "routes_assigned": 864,
+    "routes_unassigned": 136,
+    "assignment_rate": "86.40%"
+  },
+  "costs": {
+    "total_cost_pln": 0.0,
+    "relocation_cost_pln": 0.0,
+    "overage_cost_pln": 0.0,
+    "avg_cost_per_route_pln": 0.0,
+    "cost_breakdown": {
+      "relocation_percentage": "0%",
+      "overage_percentage": "0%"
+    }
+  },
+  "relocations": {
+    "total_relocations": 0,
+    "relocation_ratio": "0.0%",
+    "avg_relocations_per_vehicle": 0.0
+  },
+  "vehicles": {
+    "total_vehicles": 180,
+    "vehicles_over_annual_limit": 0,
+    "vehicles_over_limit_percentage": "0.0%",
+    "avg_overage_per_violating_vehicle_km": 0,
+    "avg_routes_per_vehicle": 4.8
+  },
+  "placement": {
+    "vehicles_placed": 180,
+    "locations_used": 37,
+    "avg_vehicles_per_location": 4.9
+  }
+}

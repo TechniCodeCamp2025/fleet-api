@@ -1,0 +1,166 @@
+ 
+ 
+        Predictive Fleet Swap AI  
+ 
+Hackathon 24H —  Technischools × LSP Group  
+Opis problemu :  
+Firma LSP GROUP  jest czołowym partnerem logistycznym dla takich ﬁrm jak DPD, InPost, UPS, 
+GLS, Carrefour  i wielu innych.  
+Flota przedsiębiorstwa obejmuje ponad 200 ciągników siodłowych  . 
+Każdy pojazd posiada roczny limit przebiegu wynoszący 150 000 km , wynikający z warunków 
+umowy serwisowej. Przekroczenie tego limitu wiąże się z dodatkowym kosztem w wysokości x 
+PLN/km. 
+Ciągniki realizują stałe trasy  o długości od 50 do 1 050 km dziennie, pracując 5–7 dni w 
+tygodniu . Dodatkowo występują przejazdy dojazdowe, trasy weekendowe oraz zlecenia 
+dodatkowe. Należy również uwzględnić okresy przeglądów i napraw , podczas których pojazdy 
+są czasowo wyłączone z eksploatacji.  
+Problem:  
+Każdy pojazd jest odbierany w innym terminie, a po 12 miesiącach od odbioru  jego przebieg 
+powinien maksymalnie zbliżać się do limitu 150 000 km  – bez przekroczenia (lub z 
+kontrolowanym przekroczeniem przy minimalnym koszcie).  
+W tym celu konieczne jest rotowanie pojazdów między trasami , przy ograniczeniu do 
+maksymalnie 1 zamiany na pojazd w ciągu 3 miesięcy  
+ 
+Misja:  
+W 24 godziny zbudujcie prototyp inteligentnego planera  ﬂoty ciężarowej, który potraﬁ : 
+planować zamiany  pojazdów, tak aby utrzymać maksymalne limity km rocznie . 
+A przy tym ;  
+• przewidywać przebiegi  na podstawie tras i dotychczasowych przebiegów ,  
+• wyznacza optymalny plan przypisań i zamian pojazdów,  
+• monitoruje stan licznika, serwisy i limity leasingowe , 
+• minimalizuje dodatkowe koszty przy 100% realizacji tras . 
+
+ 
+ 
+Dlaczego warto?  
+• Realny case z branży transportowej.  Wasze decyzje przełożą się na konkretne koszty w 
+€ / PLN (nadprzebieg, serwis, przestój, zamiana).  
+• End -to-end w 24h.  Przejdziecie cały cykl: prognoza → plan → dashboard 
+(Gantt/KPI/alerty) → demo.  
+• Pełna swoboda metody.  Możecie użyć prostych reguł, arkuszy, algorytmów, ML lub AI — 
+byle działało i było zrozumiale.  
+• Nagroda główna :   
+o 2000 zł dla wybranego zespółu który przygotuje najlepszy projekt.  
+o Nagrody indywidualne  
+o Płatne staże w ﬁrmie LSP GROUP  
+ 
+1) Co zrobicie w 24h — skrót  
+1. Wytrenowanie modelu i analiza danych treningowych (zbiór 12 miesięcy) przetestowanie 
+systemu na zbiorze testowym (1 msc. danych)  
+2. Wizualizacja predykcji modelu oraz stworzony system z informacjami o aktualnym 
+położeniu pojazdów i ich przebiegu, powiadomieniami o zbliżających się rotacjach, 
+serwisach, historia zmian.   
+3. Dodatkowy koszt  policzony i pokazany: rotacja pojazdu , przekroczone kilometry.  
+4. Czytelny system gotowy  do wdrożenia  
+ 
+2) Dane wejściowe  
+Dostarczymy zestaw plików CSV odzwierciedlających operacje ﬂotowe (pojazdy, trasy,  odcinki 
+tras,  lokalizacje) . Nie narzucamy schematu tabel.   
+ 
+  
+
+ 
+ 
+Schematy plików z danymi  
+Vehicles.csv  
+ 
+Column  Type  
+Id INT 
+registration_number  NVARCHAR(32)  
+brand  NVARCHAR(100)  
+service_interval_km  INT 
+Leasing_start_km  INT 
+leasing_limit_km  INT 
+leasing_start_ date  DATETIME  
+leasing_end_date  DATETIME  
+current_odometer_km  INT 
+Current_location_id  ID 
+ 
+Locations.csv  
+Column  Type  
+id INT  
+name  NVARCHAR(64)  
+lat DECIMAL(9,6)  
+long  DECIMAL(9,6)  
+is_hub  BIT 
+ Locations_relations.csv  
+Column  Type  
+id INT  
+id_loc_1  INT 
+id_loc_2  INT 
+dist  DECIMAL(10,3)  
+time  DECIMAL(10,2)  
+   
+
+ 
+ 
+Routes.csv  
+Column  Type  
+id INT 
+IDENTITY(1,1)  
+start_datetime  DATETIME2(0)  
+end_datetime  DATETIME2(0)  
+ 
+Segments.csv  
+Column  Type  
+id INT  
+route_id  INT 
+seq  INT 
+start_loc_id  INT 
+end_loc_id  INT 
+start_datetime  DATETIME  
+end_datetime  DATETIME  
+distance_travelled_km  INT 
+relation_id  INT 
+  
+
+ 
+ 
+3) Ograniczenia i reguły (constraints)  
+3.1 Twarde (feasibility)  
+1. Trasy stałe  – czas/przebieg narzucony przez klienta.  
+2. Brak podwójnych przydziałów  – jeden pojazd ≠ dwie trasy równocześnie.  
+3. Limit częstotliwości zamian  – max 1 zamiana/pojazd/3 miesiące . 
+4. Interwały serwisów i limity kontraktowe   
+5. Limity roczne  — zgodnie z CSV per pojazd; przekroczenia dozwolone z kosztem 
+(nadprzebieg)  
+6. Serwis musi zostać wykonany po trasie  która przekroczy limit kilometrów i 
+„blokuje” pojazd na 48h  
+7. Pojazdy na początek nie mają przypisanej początkowej lokalizacji  
+3.3 Koszty (dodatkowe parametry ) 
+• Zamiana lokalizacji pojazdu : 1000 PLN + 1 PLN/km + 150 PLN/h  
+• Nadprzebieg : 0.92  PLN /km. 
+3.4 Interwały i limity  
+Marka  Rodzaj  Interwał przeglądowy (km)  Limit przebiegu kontraktowego (km)  
+DAF  Ciągnik siodłowy  120 000  450 000   
+Scania  Ciągnik siodłowy  120 000  750 000  
+Volvo  Ciągnik siodłowy  110 000  450 000  
+Roczne limity : w drugim zbiorze CSV limity roczne są określone per pojazd (np. 150 000 lub 
+163 200 km/rok). Planner musi respektować  oba poziomy : limit roczny  (kara = nadprzebieg) 
+oraz kontraktowy łączny  (km przez cały okres), a także interwały przeglądowe  między 
+serwisami.  
+ 
+  
+
+ 
+ 
+4) Funkcja celu i KPI  
+4.1 KPI (raportowane)  
+• % pojazdów bez przekroczeń limitów  
+• liczba zamian  
+• szacowany czas do osiągnięcia limitu (km)  
+• % wykorzystania kontraktów  (km przejchane/ km dostępne)  
+ 
+5) Output  (co ma wypluwać system)  
+1. Propozycja przypisani na podstawie dostarczonych tras  
+2. Raport  dodatkowych  kosztów : zamiany, dodatkowe kilometry  
+3. Alerty: przekroczenia limitów, konﬂikty okien, zbliżające się serwisy . 
+4. Panel zmian : historia  przyjętych aktualizacji i ich wpływ na rekomendacje.  
+ 
+6) Bonusowe punkty  
+• Interaktywn a predykcja wizualizacja  
+• Responsywny system  
+• Rzeczywista lokalizacja pojazdów  
+• Prognoza na najbliższy rok na bazie danych historycznych  
+ 
+ 
