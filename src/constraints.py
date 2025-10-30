@@ -35,7 +35,7 @@ def is_time_feasible(
             return False, f"No route from location {vehicle_state.current_location_id} to {route.start_location_id}"
         
         # Calculate arrival time
-        travel_time = timedelta(hours=relation.time)
+        travel_time = timedelta(minutes=relation.time)
         arrival = vehicle_state.available_from + travel_time
         
         if arrival > route.start_datetime:

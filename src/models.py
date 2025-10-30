@@ -213,6 +213,7 @@ class AssignmentConfig:
     relocation_per_km_pln: float = 1.0
     relocation_per_hour_pln: float = 150.0
     overage_per_km_pln: float = 0.92
+    service_cost_pln: float = 2000.0  # Cost to perform service
     
     # Service parameters
     service_tolerance_km: int = 1000
@@ -223,10 +224,25 @@ class AssignmentConfig:
     max_swaps_per_period: int = 1
     swap_period_days: int = 90
     
-    # Look-ahead parameters
-    look_ahead_days: int = 7
-    chain_depth: int = 3  # How many routes ahead to consider
+    # Look-ahead parameters (assignment)
+    assignment_lookahead_days: int = 0  # Days of routes to process (0 = all routes)
+    look_ahead_days: int = 0  # Days to look ahead for chain building (0 = disabled)
+    chain_depth: int = 0  # 0 = disabled (recommended per spec)
+    chain_weight: float = 10.0  # Weight for chain score
+    max_lookahead_routes: int = 50  # Max routes to scan ahead
+    use_chain_optimization: bool = False  # Enable chain building (not recommended)
+    
+    # Assignment strategy
+    assignment_strategy: str = 'greedy'  # 'greedy' or 'greedy_with_lookahead'
     
     # Placement parameters
     placement_lookahead_days: int = 14
+    placement_strategy: str = 'cost_matrix'  # 'cost_matrix' or 'proportional'
+    placement_max_concentration: float = 0.30  # Max fraction at one location
+    placement_max_vehicles_per_location: int = None  # None = calculated from max_concentration
+    
+    # Performance
+    use_pathfinding: bool = False  # Use multi-hop pathfinding (slower)
+    use_relation_cache: bool = True  # Cache relation lookups
+    progress_report_interval: int = 1000  # Report progress every N routes
 

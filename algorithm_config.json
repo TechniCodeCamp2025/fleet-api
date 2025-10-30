@@ -3,15 +3,20 @@
   "output_dir": "output",
   
   "placement": {
+    "strategy": "coverage_first",
     "lookahead_days": 14,
-    "strategy": "proportional",
-    "max_concentration": 0.30
+    "max_concentration": 0.30,
+    "max_vehicles_per_location": null
   },
   
   "assignment": {
     "strategy": "greedy_with_lookahead",
+    "assignment_lookahead_days": 14,
     "look_ahead_days": 7,
-    "chain_depth": 3
+    "chain_depth": 5,
+    "chain_weight": 10.0,
+    "max_lookahead_routes": 100,
+    "use_chain_optimization": true
   },
   
   "swap_policy": {
@@ -22,7 +27,8 @@
   "service_policy": {
     "service_tolerance_km": 1000,
     "service_duration_hours": 48,
-    "service_penalty_pln": 500.0
+    "service_penalty_pln": 500.0,
+    "service_cost_pln": 2000.0
   },
   
   "costs": {
@@ -33,7 +39,10 @@
   },
   
   "performance": {
-    "progress_report_days": 30
+    "progress_report_days": 30,
+    "progress_report_interval": 1000,
+    "use_pathfinding": true,
+    "use_relation_cache": true
   }
 }
 

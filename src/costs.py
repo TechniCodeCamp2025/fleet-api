@@ -32,7 +32,8 @@ def calculate_relocation_cost(
     # Calculate cost components
     base_cost = config.relocation_base_cost_pln
     distance_cost = relation.dist * config.relocation_per_km_pln
-    time_cost = relation.time * config.relocation_per_hour_pln
+    # relation.time is in minutes, convert to hours for cost calculation
+    time_cost = (relation.time / 60.0) * config.relocation_per_hour_pln
     
     total_cost = base_cost + distance_cost + time_cost
     

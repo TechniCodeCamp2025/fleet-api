@@ -86,6 +86,47 @@ def write_vehicle_states_csv(
     print(f"[✓] Written {len(vehicle_states)} vehicle states to {output_path}")
 
 
+def write_vehicles_with_placement_csv(
+    vehicles: List,
+    placement_result: PlacementResult,
+    output_path: str
+) -> None:
+    """
+    Write vehicles CSV with updated Current_location_id from placement results.
+    This CSV has the same schema as the input vehicles.csv and can be used
+    by the assignment algorithm.
+    """
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        
+        # Header - matches vehicles.csv schema exactly
+        writer.writerow([
+            'Id', 'registration_number', 'brand', 'service_interval_km',
+            'Leasing_start_km', 'leasing_limit_km', 'leasing_start_date',
+            'leasing_end_date', 'current_odometer_km', 'Current_location_id'
+        ])
+        
+        # Write each vehicle with its assigned location from placement
+        for vehicle in vehicles:
+            # Get assigned location from placement result
+            assigned_location = placement_result.placements.get(vehicle.id, 'N/A')
+            
+            writer.writerow([
+                vehicle.id,
+                vehicle.registration_number,
+                vehicle.brand,
+                vehicle.service_interval_km,
+                vehicle.leasing_start_km,
+                vehicle.leasing_limit_km,
+                vehicle.leasing_start_date.strftime('%Y-%m-%d %H:%M:%S'),
+                vehicle.leasing_end_date.strftime('%Y-%m-%d %H:%M:%S'),
+                vehicle.current_odometer_km,
+                assigned_location
+            ])
+    
+    print(f"[✓] Written {len(vehicles)} vehicles with placement to {output_path}")
+
+
 def write_placement_report(
     placement_result: PlacementResult,
     output_path: str
@@ -230,7 +271,8 @@ def save_all_results(
     placement_result: PlacementResult,
     assignment_result: AssignmentResult,
     output_dir: str,
-    runtime_seconds: float
+    runtime_seconds: float,
+    vehicles: List = None
 ) -> None:
     """Save all results to output directory"""
     output_path = Path(output_dir)
@@ -240,6 +282,14 @@ def save_all_results(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     print(f"\n[*] Saving results to {output_dir}/...")
+    
+    # Save vehicles with placement (new CSV for assignment input)
+    if vehicles:
+        write_vehicles_with_placement_csv(
+            vehicles,
+            placement_result,
+            str(output_path / f"vehicles_placed_{timestamp}.csv")
+        )
     
     # Save assignments
     write_assignments_csv(

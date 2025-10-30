@@ -90,7 +90,8 @@ def run_optimization(
         placement_result,
         assignment_result,
         output_dir,
-        total_time
+        total_time,
+        vehicles
     )
     
     # Final summary
@@ -121,30 +122,30 @@ def run_optimization(
 def run_quick_test(
     data_dir: str,
     output_dir: str,
-    config: AssignmentConfig,
-    num_routes: int = 1000
+    config: AssignmentConfig
 ) -> Tuple[PlacementResult, AssignmentResult]:
     """
-    Run optimization on subset of routes for quick testing.
+    Run optimization using lookahead windows from config.
+    Routes processed are determined by placement_lookahead_days and assignment_lookahead_days.
     """
-    print(f"\n🧪 QUICK TEST MODE - Processing first {num_routes} routes\n")
+    print(f"\n🧪 TEST MODE\n")
+    print(f"   Placement lookahead: {config.placement_lookahead_days} days")
+    print(f"   Assignment lookahead: {config.assignment_lookahead_days} days")
+    print()
     
     # Load data
-    vehicles, locations, relation_lookup, all_routes = load_all_data(data_dir)
-    
-    # Take subset
-    routes = all_routes[:num_routes]
-    print(f"[*] Using {len(routes)} routes for testing\n")
+    vehicles, locations, relation_lookup, routes = load_all_data(data_dir)
+    print(f"[*] Loaded {len(routes)} total routes (algorithms will filter by lookahead)\n")
     
     start_time = time.time()
     
-    # Run placement
+    # Run placement (will use placement_lookahead_days internally)
     placement_result = calculate_cost_based_placement(
         vehicles, routes, locations, relation_lookup, config
     )
     apply_placement_to_vehicles(vehicles, placement_result.placements)
     
-    # Run assignment
+    # Run assignment (will use assignment_lookahead_days internally)
     assignment_result = assign_routes(
         vehicles, routes, relation_lookup, config
     )
@@ -152,9 +153,9 @@ def run_quick_test(
     total_time = time.time() - start_time
     
     # Save results
-    save_all_results(placement_result, assignment_result, output_dir, total_time)
+    save_all_results(placement_result, assignment_result, output_dir, total_time, vehicles)
     
-    print(f"\n✅ Quick test completed in {total_time:.2f} seconds")
+    print(f"\n✅ Test completed in {total_time:.2f} seconds")
     
     return placement_result, assignment_result
 
