@@ -318,8 +318,8 @@ def save_placement_results(
         # Save vehicle placements to database
         # Update vehicle current locations
         for vehicle_id, location_id in placement_result.placements.items():
-            db.cursor.execute(
-                "UPDATE vehicles SET current_location_id = ? WHERE id = ?",
+            db.cur.execute(
+                "UPDATE vehicles SET current_location_id = %s WHERE id = %s",
                 (location_id, vehicle_id)
             )
         
