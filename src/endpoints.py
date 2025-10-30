@@ -175,14 +175,15 @@ def validate_csv_structure(content: bytes, csv_type: str) -> Tuple[bool, str, Li
         if missing_cols:
             return False, f"Missing required columns: {missing_cols}", []
         
-        # Read and validate rows
+        # Read and validate rows - validate ALL rows for data integrity
         rows = []
+        row_count = 0
         for idx, row in enumerate(reader):
-            if idx >= 10:  # Only validate first 10 rows for performance
-                break
+            row_count += 1
+            rows.append(row)
             
-            # Basic type validation on first few rows
-            if idx < 3:
+            # Basic type validation on sample rows (every 100th row + first 10)
+            if idx < 10 or idx % 100 == 0:
                 for col, expected_type in schema['types'].items():
                     value = row.get(col, '').strip()
                     if value and value != 'N/A':  # Skip empty and N/A values
@@ -194,7 +195,9 @@ def validate_csv_structure(content: bytes, csv_type: str) -> Tuple[bool, str, Li
                         except ValueError:
                             return False, f"Row {idx+1}: Column '{col}' has invalid type (expected {expected_type.__name__})", []
             
-            rows.append(row)
+            # Limit preview rows for memory
+            if len(rows) > 1000:
+                rows = rows[:100]  # Keep only first 100 for preview
         
         return True, "Valid", rows
     

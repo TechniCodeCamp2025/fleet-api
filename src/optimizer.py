@@ -14,6 +14,7 @@ from placement_cost_based import calculate_cost_based_placement
 from placement import apply_placement_to_vehicles
 from assignment import assign_routes
 from output import save_all_results
+from pathfinding import clear_path_cache
 
 console = Console()
 
@@ -50,6 +51,9 @@ def run_optimization(
     ))
     
     start_time = time.time()
+    
+    # Clear path cache to prevent memory leak between runs
+    clear_path_cache()
     
     # Step 1: Load data
     console.print("\n[bold cyan]STEP 1: LOADING DATA[/bold cyan]")
@@ -174,6 +178,9 @@ def run_quick_test(
         title="[yellow]TEST MODE[/yellow]",
         border_style="yellow"
     ))
+    
+    # Clear path cache to prevent memory leak between runs
+    clear_path_cache()
     
     # Load data
     with console.status("[bold green]Loading data...", spinner="dots"):

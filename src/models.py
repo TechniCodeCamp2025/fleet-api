@@ -64,7 +64,7 @@ class LocationRelation:
     id_loc_1: int
     id_loc_2: int
     dist: float  # kilometers
-    time: float  # hours
+    time: float  # MINUTES (stored as minutes, convert to hours when needed)
 
 
 @dataclass
@@ -190,6 +190,7 @@ class PlacementResult:
     total_vehicles_placed: int
     locations_used: int
     avg_vehicles_per_location: float
+    total_cost: float = 0.0  # Estimated total relocation cost
 
 
 @dataclass
@@ -245,4 +246,55 @@ class AssignmentConfig:
     use_pathfinding: bool = False  # Use multi-hop pathfinding (slower)
     use_relation_cache: bool = True  # Cache relation lookups
     progress_report_interval: int = 1000  # Report progress every N routes
+    
+    def __post_init__(self):
+        """Validate configuration values"""
+        # Validate non-negative costs
+        if self.relocation_base_cost_pln < 0:
+            raise ValueError("relocation_base_cost_pln must be non-negative")
+        if self.relocation_per_km_pln < 0:
+            raise ValueError("relocation_per_km_pln must be non-negative")
+        if self.relocation_per_hour_pln < 0:
+            raise ValueError("relocation_per_hour_pln must be non-negative")
+        if self.overage_per_km_pln < 0:
+            raise ValueError("overage_per_km_pln must be non-negative")
+        if self.service_cost_pln < 0:
+            raise ValueError("service_cost_pln must be non-negative")
+        if self.service_penalty_pln < 0:
+            raise ValueError("service_penalty_pln must be non-negative")
+        
+        # Validate positive parameters
+        if self.service_tolerance_km < 0:
+            raise ValueError("service_tolerance_km must be non-negative")
+        if self.service_duration_hours <= 0:
+            raise ValueError("service_duration_hours must be positive")
+        if self.max_swaps_per_period < 0:
+            raise ValueError("max_swaps_per_period must be non-negative")
+        if self.swap_period_days <= 0:
+            raise ValueError("swap_period_days must be positive")
+        
+        # Validate lookahead parameters
+        if self.assignment_lookahead_days < 0:
+            raise ValueError("assignment_lookahead_days must be non-negative")
+        if self.look_ahead_days < 0:
+            raise ValueError("look_ahead_days must be non-negative")
+        if self.chain_depth < 0:
+            raise ValueError("chain_depth must be non-negative")
+        if self.max_lookahead_routes <= 0:
+            raise ValueError("max_lookahead_routes must be positive")
+        if self.placement_lookahead_days <= 0:
+            raise ValueError("placement_lookahead_days must be positive")
+        
+        # Validate concentration
+        if not 0.0 < self.placement_max_concentration <= 1.0:
+            raise ValueError("placement_max_concentration must be between 0 and 1")
+        
+        # Validate strategy
+        valid_strategies = ['greedy', 'greedy_with_lookahead']
+        if self.assignment_strategy not in valid_strategies:
+            raise ValueError(f"assignment_strategy must be one of {valid_strategies}")
+        
+        valid_placement_strategies = ['cost_matrix', 'proportional']
+        if self.placement_strategy not in valid_placement_strategies:
+            raise ValueError(f"placement_strategy must be one of {valid_placement_strategies}")
 

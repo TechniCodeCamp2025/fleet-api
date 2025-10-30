@@ -8,6 +8,7 @@ from psycopg2 import pool
 from typing import List, Dict, Tuple, Optional
 from datetime import datetime
 import os
+import threading
 
 from models import (
     Vehicle, Location, LocationRelation, Route, Segment,
@@ -15,39 +16,44 @@ from models import (
 )
 
 
-# Global connection pool
+# Global connection pool with thread safety
 _connection_pool = None
+_pool_lock = threading.Lock()
 
 
 def get_connection_pool():
-    """Get or create the global connection pool"""
+    """Get or create the global connection pool (thread-safe)"""
     global _connection_pool
     
+    # Double-checked locking pattern for thread safety
     if _connection_pool is None:
-        # Build connection string from environment variables
-        conn_string = os.getenv('DATABASE_URL')
-        
-        if not conn_string:
-            # Build from individual env vars
-            db_host = os.getenv('DB_HOST', 'localhost')
-            db_port = os.getenv('DB_PORT', '5432')
-            db_name = os.getenv('DB_NAME', 'fleet_db')
-            db_user = os.getenv('DB_USER', 'postgres')
-            db_password = os.getenv('DB_PASSWORD', '')
-            
-            conn_string = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
-        
-        # Create connection pool
-        min_conn = int(os.getenv('DB_POOL_MIN_CONN', '2'))
-        max_conn = int(os.getenv('DB_POOL_MAX_CONN', '10'))
-        
-        _connection_pool = psycopg2.pool.SimpleConnectionPool(
-            min_conn,
-            max_conn,
-            conn_string
-        )
-        
-        print(f"[✓] Database connection pool created ({min_conn}-{max_conn} connections)")
+        with _pool_lock:
+            # Check again inside lock
+            if _connection_pool is None:
+                # Build connection string from environment variables
+                conn_string = os.getenv('DATABASE_URL')
+                
+                if not conn_string:
+                    # Build from individual env vars
+                    db_host = os.getenv('DB_HOST', 'localhost')
+                    db_port = os.getenv('DB_PORT', '5432')
+                    db_name = os.getenv('DB_NAME', 'fleet_db')
+                    db_user = os.getenv('DB_USER', 'postgres')
+                    db_password = os.getenv('DB_PASSWORD', '')
+                    
+                    conn_string = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
+                
+                # Create connection pool
+                min_conn = int(os.getenv('DB_POOL_MIN_CONN', '2'))
+                max_conn = int(os.getenv('DB_POOL_MAX_CONN', '10'))
+                
+                _connection_pool = psycopg2.pool.SimpleConnectionPool(
+                    min_conn,
+                    max_conn,
+                    conn_string
+                )
+                
+                print(f"[✓] Database connection pool created ({min_conn}-{max_conn} connections)")
     
     return _connection_pool
 
@@ -92,6 +98,10 @@ class FleetDatabase:
             self.conn.commit()
         else:
             self.conn.rollback()
+        
+        # Close cursor to prevent resource leak
+        if self.cur:
+            self.cur.close()
         
         # Return connection to pool or close direct connection
         if self._from_pool:
@@ -417,22 +427,30 @@ class FleetDatabase:
         vehicle_states: Dict[int, VehicleState],
         run_id: int
     ):
-        """Bulk save all algorithm results"""
+        """Bulk save all algorithm results with transaction safety"""
         print(f"\n[*] Saving {len(assignments)} assignments to database...")
         
-        for assignment in assignments:
-            assignment_id = self.save_assignment(assignment, run_id)
+        try:
+            # Start transaction
+            for assignment in assignments:
+                assignment_id = self.save_assignment(assignment, run_id)
+                
+                # Save vehicle state if available
+                if assignment.vehicle_id in vehicle_states:
+                    self.save_vehicle_state(
+                        vehicle_states[assignment.vehicle_id],
+                        run_id,
+                        assignment_id
+                    )
             
-            # Save vehicle state if available
-            if assignment.vehicle_id in vehicle_states:
-                self.save_vehicle_state(
-                    vehicle_states[assignment.vehicle_id],
-                    run_id,
-                    assignment_id
-                )
-        
-        self.conn.commit()
-        print(f"[✓] Saved all results to database")
+            # Commit all changes atomically
+            self.conn.commit()
+            print(f"[✓] Saved all results to database")
+        except Exception as e:
+            # Rollback on any error to maintain consistency
+            self.conn.rollback()
+            print(f"[✗] Error saving results: {e}")
+            raise
     
     # ========================================================================
     # CSV IMPORT (upsert - no conflicts)

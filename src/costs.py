@@ -106,6 +106,9 @@ def calculate_assignment_cost(
     # Calculate total
     total_cost = sum(cost_breakdown.values())
     
+    # Prevent negative costs from look_ahead_bonus
+    total_cost = max(0.0, total_cost)
+    
     return total_cost, cost_breakdown
 
 

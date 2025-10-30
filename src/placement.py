@@ -71,6 +71,8 @@ def distribute_vehicles_proportionally(
     """
     if not sorted_locations:
         # Fallback: place all at first vehicle's location or location 1
+        if not vehicles:
+            return {}
         fallback_loc = vehicles[0].current_location_id if vehicles[0].current_location_id else 1
         return {v.id: fallback_loc for v in vehicles}
     
@@ -83,8 +85,8 @@ def distribute_vehicles_proportionally(
         if vehicle_index >= len(vehicles):
             break
         
-        # Calculate proportion
-        proportion = demand_count / total_demand
+        # Calculate proportion (safe division)
+        proportion = demand_count / total_demand if total_demand > 0 else 1.0 / len(sorted_locations)
         vehicles_needed = max(1, int(len(vehicles) * proportion))
         
         # Apply concentration limit

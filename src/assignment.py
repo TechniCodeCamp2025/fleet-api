@@ -5,6 +5,7 @@ Assigns vehicles to routes minimizing total cost.
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
+import copy
 
 from models import (
     Vehicle, Route, VehicleState, RouteAssignment,
@@ -246,7 +247,8 @@ def find_best_vehicle_with_lookahead(
         
         # Combined score: immediate cost - future opportunity bonus
         # Higher chain_score = better future opportunities = lower effective cost
-        effective_cost = immediate_cost - (chain_score * 10.0)  # Weight chain score
+        chain_bonus = chain_score * config.chain_weight
+        effective_cost = immediate_cost - chain_bonus
         
         if effective_cost < best_score:
             best_score = effective_cost
@@ -307,12 +309,13 @@ def update_vehicle_state(
     vehicle_state.last_route_id = route.id
     vehicle_state.routes_completed += 1
     
-    # Update overage cost
+    # Update overage cost - recalculate total based on current annual km
     overage_cost, _ = calculate_overage_cost(
         vehicle_state.km_driven_this_lease_year,
         vehicle_state.annual_limit_km,
         config
     )
+    # Overwrite is correct here - overage is cumulative based on total annual km
     vehicle_state.total_overage_cost = overage_cost
 
 
@@ -445,8 +448,8 @@ def assign_routes(
             unassigned_routes.append(route)
             continue
         
-        # Capture state before update
-        state_before = VehicleState(**vars(vehicle_states[vehicle_id]))
+        # Capture state before update (deep copy to avoid shared references)
+        state_before = copy.deepcopy(vehicle_states[vehicle_id])
         
         # Update vehicle state
         update_vehicle_state(vehicle_states[vehicle_id], route, cost, relation_lookup, config)
@@ -465,7 +468,7 @@ def assign_routes(
     total_relocation_cost = sum(s.total_relocation_cost for s in vehicle_states.values())
     total_overage_cost = sum(s.total_overage_cost for s in vehicle_states.values())
     total_cost = total_relocation_cost + total_overage_cost
-    avg_cost = total_cost / len(assignments) if assignments else 0
+    avg_cost = total_cost / len(assignments) if len(assignments) > 0 else 0.0
     
     print(f"\n[*] Assignment Complete!")
     print(f"    Period: {period_start.strftime('%Y-%m-%d')} to {period_end.strftime('%Y-%m-%d')} ({period_days} days)")
@@ -484,8 +487,9 @@ def assign_routes(
     print(f"    Vehicles over annual limit: {vehicles_over_limit}/{len(vehicles)}")
     
     if vehicles_over_limit > 0:
-        avg_overage = sum(max(0, s.km_driven_this_lease_year - s.annual_limit_km) 
-                         for s in vehicle_states.values()) / vehicles_over_limit
+        total_overage_km = sum(max(0, s.km_driven_this_lease_year - s.annual_limit_km) 
+                              for s in vehicle_states.values())
+        avg_overage = total_overage_km / vehicles_over_limit if vehicles_over_limit > 0 else 0
         print(f"    Avg overage per violating vehicle: {avg_overage:.0f} km")
     
     print("\n" + "="*60)

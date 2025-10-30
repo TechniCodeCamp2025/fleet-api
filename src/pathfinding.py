@@ -43,13 +43,13 @@ def find_shortest_path(
     # Try direct connection first
     direct = relation_lookup.get((from_loc, to_loc))
     if direct:
-        # Convert time from minutes to hours for PathResult
+        # time is stored in minutes, convert to hours for PathResult
         return PathResult(True, direct.dist, direct.time / 60.0, [from_loc, to_loc])
     
     # Try reverse
     direct_rev = relation_lookup.get((to_loc, from_loc))
     if direct_rev:
-        # Convert time from minutes to hours for PathResult
+        # time is stored in minutes, convert to hours for PathResult
         return PathResult(True, direct_rev.dist, direct_rev.time / 60.0, [from_loc, to_loc])
     
     # Build adjacency graph if we need multi-hop
@@ -65,13 +65,13 @@ def find_shortest_path(
     for (loc1, loc2), relation in relation_lookup.items():
         if loc1 not in adjacency:
             adjacency[loc1] = []
-        # Convert time from minutes to hours for pathfinding
+        # time is stored in minutes, convert to hours for pathfinding
         adjacency[loc1].append((loc2, relation.dist, relation.time / 60.0))
         
         # Assume bidirectional
         if loc2 not in adjacency:
             adjacency[loc2] = []
-        # Convert time from minutes to hours for pathfinding
+        # time is stored in minutes, convert to hours for pathfinding
         adjacency[loc2].append((loc1, relation.dist, relation.time / 60.0))
     
     # Dijkstra's algorithm with hop limit

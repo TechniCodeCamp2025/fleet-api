@@ -115,7 +115,7 @@ def load_segments(csv_path: str) -> Dict[int, List[Segment]]:
                 end_loc_id=int(row['end_loc_id']),
                 start_datetime=parse_datetime(row['start_datetime']),
                 end_datetime=parse_datetime(row['end_datetime']),
-                distance_travelled_km=float(row['relation_id']),  # This seems to be distance based on the data
+                distance_travelled_km=float(row.get('distance_travelled_km', 0)),
                 relation_id=int(row['relation_id'])
             )
             segments_by_route[segment.route_id].append(segment)
