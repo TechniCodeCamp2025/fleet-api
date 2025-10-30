@@ -232,7 +232,8 @@ def calculate_placement(
         demand_analysis=demand,
         total_vehicles_placed=stats['total_vehicles'],
         locations_used=stats['locations_used'],
-        avg_vehicles_per_location=stats['avg_vehicles_per_location']
+        avg_vehicles_per_location=stats['avg_vehicles_per_location'],
+        total_cost=estimated_cost  # Store estimated cost
     )
 
 

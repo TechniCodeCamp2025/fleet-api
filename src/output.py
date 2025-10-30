@@ -391,39 +391,48 @@ def save_all_results(
 ) -> int:
     """
     Save all results to database and/or output directory.
-    If run_id is provided or USE_DATABASE env var is set, save to database.
-    Otherwise save to CSV files.
+    Tries database first (if connection available), falls back to CSV if database unavailable.
     
     Returns:
         run_id if saved to database, None if saved to CSV
     """
-    # If run_id provided or USE_DATABASE set, save to database
-    if run_id is not None or os.getenv('USE_DATABASE') == '1':
-        console.print("[dim]Saving results to database...[/dim]")
-        from db_adapter import FleetDatabase
-        
-        with FleetDatabase() as db:
-            if run_id is None:
-                # Start a new run if not provided
-                run_id = db.start_algorithm_run()
+    # Try to save to database if run_id provided, USE_DATABASE set, or DATABASE_URL configured
+    should_try_db = (
+        run_id is not None or 
+        os.getenv('USE_DATABASE') == '1' or 
+        os.getenv('DATABASE_URL') is not None
+    )
+    
+    if should_try_db:
+        try:
+            console.print("[dim]Saving results to database...[/dim]")
+            from db_adapter import FleetDatabase
             
-            # Save all assignments and vehicle states
-            db.save_all_results(
-                assignment_result.assignments,
-                assignment_result.vehicle_states,
-                run_id
-            )
+            with FleetDatabase() as db:
+                if run_id is None:
+                    # Start a new run if not provided
+                    run_id = db.start_algorithm_run()
+                
+                # Save all assignments and vehicle states
+                db.save_all_results(
+                    assignment_result.assignments,
+                    assignment_result.vehicle_states,
+                    run_id
+                )
+                
+                # Complete the run
+                db.complete_algorithm_run(
+                    run_id,
+                    routes_processed=assignment_result.routes_assigned + assignment_result.routes_unassigned,
+                    assignments_created=assignment_result.routes_assigned,
+                    total_cost=assignment_result.total_cost
+                )
             
-            # Complete the run
-            db.complete_algorithm_run(
-                run_id,
-                routes_processed=assignment_result.routes_assigned + assignment_result.routes_unassigned,
-                assignments_created=assignment_result.routes_assigned,
-                total_cost=assignment_result.total_cost
-            )
-        
-        console.print(f"[green]✓[/green] Results saved to database (run_id=[cyan]{run_id}[/cyan])")
-        return run_id
+            console.print(f"[green]✓[/green] Results saved to database (run_id=[cyan]{run_id}[/cyan])")
+            return run_id
+        except Exception as e:
+            console.print(f"[yellow]⚠[/yellow] Database save failed ({e}), falling back to CSV...")
+            # Fall through to CSV save below
     
     # Otherwise save to CSV (backward compatibility)
     output_path = Path(output_dir)

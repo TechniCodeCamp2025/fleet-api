@@ -3,6 +3,7 @@ Database adapter for fleet optimization algorithms.
 Handles all database I/O - algorithms don't touch CSV anymore.
 """
 import psycopg2
+import psycopg2.extras
 from psycopg2.extras import RealDictCursor
 from psycopg2 import pool
 from typing import List, Dict, Tuple, Optional

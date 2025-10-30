@@ -324,6 +324,7 @@ def calculate_cost_based_placement(
         demand_analysis=demand_counts,
         total_vehicles_placed=len(placement),
         locations_used=len(location_counts),
-        avg_vehicles_per_location=len(placement) / len(location_counts) if location_counts else 0
+        avg_vehicles_per_location=len(placement) / len(location_counts) if location_counts else 0,
+        total_cost=expected_cost  # Store estimated cost
     )
 
